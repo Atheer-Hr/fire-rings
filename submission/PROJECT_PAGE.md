@@ -51,7 +51,9 @@ https://atheer-hr.github.io/fire-rings
    * One global ratio reaches 0.92.
    * Using raw VIIRS as if it were MODIS reaches 0.23, with a +718% bias.
 
-4. **Reads it for people.** Choose an area on the map (draw a box, type coordinates, or pick a place), and Fire Rings shows:
+4. **Tells the story first.** The site opens with the problem rather than a dashboard. Earth's own Fire Rings sit under a before/after handle the reader drags: on one side the record as published, glowing falsely after 2012, and on the other the repaired record. A "watch the record grow" button replays 2000–2026 ring by ring, naming each satellite change, and then repairs the record in front of the reader. A "When" map colours every place by the month it burns most, and a "fire wave" animates the burning season travelling around the planet.
+
+5. **Reads it for people.** Choose an area on the map (draw a box, type coordinates, or pick a place), and Fire Rings shows:
    * **Fire Forecast.** A weather-app card with the expected hotspots next month, a five-flame risk level, a countdown to the fire season and a "prepare by" date.
    * **Is this normal?** The latest month compared with the median of the same month in earlier years, in one plain sentence ("13× the usual October, highest since 2015").
    * **Fire Rings.** The burning activity calendar drawn as tree rings: one ring per year, one slice per month, plus a dashed outer ring for the outlook. A toggle shows the raw record as published next to the harmonized one.
