@@ -171,12 +171,12 @@ function showBox(b) {
 }
 
 // ---------------------------------------------------------------- choose an area
-async function choose(src) {
+async function choose(src, { scroll = true } = {}) {
   showBox(src.b);
   $("#answer").hidden = false;
   $("#areaName").textContent = areaName(src);
   $("#areaMeta").textContent = t("loading");
-  $("#answer").scrollIntoView({ behavior: "smooth", block: "start" });
+  if (scroll) $("#answer").scrollIntoView({ behavior: "smooth", block: "start" });
   const area = await D.selectArea(src.b);
   state.area = area; state.src = src;
   if (src.region) $("#preset").value = src.region;
@@ -389,9 +389,9 @@ function renderReady() {
   document.querySelectorAll("[data-region]").forEach((b) => b.onclick = () => openRegion(b.dataset.region));
 }
 
-function openRegion(id) {
+function openRegion(id, opts) {
   const r = REGIONS.find((x) => x.id === id);
-  if (r) choose({ region: id, b: r.b });
+  if (r) choose({ region: id, b: r.b }, opts);
 }
 
 // ---------------------------------------------------------------- trust section (whole Earth)
@@ -403,6 +403,7 @@ function drawHero(upto) {
     highlight: D.meta().months - 1, upto, size: 460 });
 }
 function countUp(el, to, fmtFn, ms = 1400) {
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) { el.textContent = fmtFn(to); return; }
   const t0 = performance.now();
   const tick = (now) => { const k = Math.min(1, (now - t0) / ms), e = 1 - (1 - k) ** 3; el.textContent = fmtFn(to * e); if (k < 1) requestAnimationFrame(tick); };
   requestAnimationFrame(tick);
@@ -592,9 +593,12 @@ async function start() {
     const dLat = km / 111, dLon = km / (111 * Math.max(0.1, Math.cos((lat * Math.PI) / 180)));
     choose({ point: { lat, lon, km }, b: { south: lat - dLat, north: lat + dLat, west: lon - dLon, east: lon + dLon } });
   };
-  const want = new URLSearchParams(location.search).get("area");
+  // link options: ?area=asir opens an area, &noscroll keeps the page at the top, &map=when starts the map in "When"
+  const qs = new URLSearchParams(location.search);
+  const want = qs.get("area");
   const alias = { "asir-saudi-arabia": "asir", "kalimantan-indonesia": "kalimantan" };
-  if (want) openRegion(alias[want] || want);
+  if (qs.get("map") === "when") setMapMode("when");
+  if (want) openRegion(alias[want] || want, { scroll: !qs.has("noscroll") });
 }
 
 start().catch((e) => { console.error(e); $("#hint").textContent = t("loadFail"); });

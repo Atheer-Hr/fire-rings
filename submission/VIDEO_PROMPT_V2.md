@@ -1,7 +1,7 @@
 # Fire Calendar — 30-second trailer (NASA-documentary style)
 
 Two parts: (1) the **master prompt** to paste into the AI video tool, (2) the **voice-over and subtitles**.
-Shots marked **[AI]** are generated. Shots marked **[SCREEN]** are real screen recordings of the live site:
+Shots marked **[AI]** are generated. Reference image (upload with this prompt): `submission/storyboard-v2.jpg`. Shots marked **[SCREEN]** are real screen recordings of the live site:
 https://atheer-hr.github.io/fire-rings — never let the AI redraw the site.
 
 ---
@@ -36,7 +36,7 @@ forecast 40% better than the best simple method.
 | 0:07–0:11 | Satellite 2 | **[AI]** A sleek modern satellite with one solar wing slides into frame. Its point of view is razor-sharp: hundreds of small fires suddenly appear. A counter jumps fast: "fires ×7". | "Satellite 2 · 2012 · sees fires 7× smaller" |
 | 0:11–0:14 | The twist | **[SCREEN → glitch]** The site's Fire Rings on the "as published" side: the outer rings flare yellow. A digital glitch freezes the frame; red strike-through stamp "+718%". | "The fire didn't change. **The camera did.**" |
 | 0:14–0:17 | Reveal | **[SCREEN]** The site's hero: dark glowing fire map of Earth, headline "Is the fire season in your area **normal?**". Logo resolves: flame mark + "Fire Calendar". Music swells. | "Fire Calendar" |
-| 0:17–0:21 | It works | **[SCREEN]** Click "Asir" → the weather-style **Fire Forecast** card appears: "13 · Moderate · fires expected in November · Fire season under way". | "Is this season normal? In 3 seconds." |
+| 0:17–0:21 | It works | **[SCREEN]** Click "Asir" → the weather-style **Fire Forecast** card appears: "15 · Moderate · fires expected in November · Fire season under way". | "Is this season normal? In 3 seconds." |
 | 0:21–0:24 | Proof | **[SCREEN]** "Why trust it": the line sweeps across Earth's rings and the false glow calms; the counter shows ~~718%~~ → **2.2%**. | "25 years, one honest record." |
 | 0:24–0:27 | Scale | **[SCREEN]** Quick cuts: the Readiness list's top-3 cards, then the "When" world map with the **Fire wave** travelling around the planet. | "Any place on Earth. Before the season." |
 | 0:27–0:30 | End card | Dark background, logo and gradient line. | **Fire Calendar** — From firefighting to fire-readiness · atheer-hr.github.io/fire-rings · Team ASR Space · NASA Space Apps Challenge 2026 |
