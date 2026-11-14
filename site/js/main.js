@@ -213,17 +213,17 @@ function render() {
   renderForecast(a, sea);
   renderVerdict(a, sea, total);
 
-  V.rings("#rings", Array.from(series), { outlook: state.rec === "H" ? a.outlook : null, title: shortName(name), highlight: last });
+  V.rings("#rings", Array.from(series), { outlook: state.rec === "H" ? a.outlook : null, title: shortName(name), highlight: last, ref: a.H });
   const two = !!state.area2;
   $("#rings2").hidden = !two;
   $("#ringsWrap").classList.toggle("pair", two);
   if (two) V.rings("#rings2", Array.from(state.rec === "H" ? state.area2.H : state.area2.naive),
-    { outlook: state.rec === "H" ? state.area2.outlook : null, title: shortName(name2), highlight: last });
-  V.legend("#ringLegend", Math.max(...series), "count");
-  $("#recNote").innerHTML = state.rec === "H" ? t("ringsNoteH") : t("ringsNoteRaw");
+    { outlook: state.rec === "H" ? state.area2.outlook : null, title: shortName(name2), highlight: last, ref: state.area2.H });
+  V.legend("#ringLegend", V.rankScale(a.H).ticks, "count");
+  $("#recNote").innerHTML = `${state.rec === "H" ? t("ringsNoteH") : t("ringsNoteRaw")} ${t("ringsColour")}`;
 
-  const cal = V.calendar("#calendar", Array.from(series), { mode: state.cal, highlight: last });
-  V.legend("#calLegend", cal.max, state.cal);
+  const cal = V.calendar("#calendar", Array.from(series), { mode: state.cal, highlight: last, ref: a.H });
+  V.legend("#calLegend", cal.ticks, state.cal);
 
   V.outlookChart("#outlook", a.outlook, monthStats(a).median);
   const fr = meta.forecast?.holdout?.lead_1;
@@ -457,10 +457,15 @@ function ringsPNG() {
   const img = new Image();
   img.onload = () => {
     ctx.drawImage(img, 0, 0, vb.width * scale, vb.height * scale);
-    ctx.fillStyle = "#e9e4dc"; ctx.font = `${12 * scale}px Inter, 'IBM Plex Sans Arabic', sans-serif`;
+    // caption: centred, and the font shrinks until the whole line fits the image width
+    const caption = `${t("title")} · ${areaName(state.src)} · NASA FIRMS MODIS + VIIRS`;
+    ctx.fillStyle = "#e9e4dc";
     ctx.direction = document.documentElement.dir;
-    ctx.textAlign = ctx.direction === "rtl" ? "right" : "left";
-    ctx.fillText(`${t("title")} · ${areaName(state.src)} · NASA FIRMS MODIS + VIIRS`, ctx.direction === "rtl" ? canvas.width - 12 * scale : 12 * scale, (vb.height + 24) * scale);
+    ctx.textAlign = "center";
+    let px = 13 * scale;
+    do { ctx.font = `${px}px 'IBM Plex Sans Arabic', Inter, sans-serif`; px -= scale; }
+    while (ctx.measureText(caption).width > canvas.width - 24 * scale && px > 6 * scale);
+    ctx.fillText(caption, canvas.width / 2, (vb.height + 24) * scale);
     canvas.toBlob((b) => { const a = document.createElement("a"); a.href = URL.createObjectURL(b); a.download = `fire-rings-${fileName()}.png`; a.click(); });
   };
   img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(new XMLSerializer().serializeToString(clone));

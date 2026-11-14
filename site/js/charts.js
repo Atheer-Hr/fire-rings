@@ -26,16 +26,33 @@ export function colorScale(max) {
   };
 }
 
+// Colour by rank within one area: a month is coloured by how it compares with every other
+// month of that same area, so a quiet region (Asir) shows its own peaks as clearly as a
+// fire-prone one (Kalimantan). `ref` is the series that sets the yardstick: the harmonized
+// record, also when the raw record is drawn, so the raw post-2012 glow stays visible.
+export function rankScale(ref) {
+  const sorted = Array.from(ref).filter((v) => v >= 0.5).sort((a, b) => a - b);
+  const n = sorted.length;
+  const color = (v) => {
+    if (v == null) return "transparent";
+    if (v < 0.5 || !n) return "var(--empty)";
+    const r = d3.bisectRight(sorted, v) / n;
+    return d3.interpolateInferno(0.12 + 0.86 * Math.min(1, r));
+  };
+  const q = (p) => (n ? sorted[Math.min(n - 1, Math.floor(p * (n - 1)))] : 0);
+  color.ticks = [q(0), q(0.5), q(1)];
+  return color;
+}
+
 export const fmt = (v) => d3.format(",.0f")(v);
 const miOf = (year, m) => (year - ym(0).year) * 12 + m - (meta().start[1] - 1);
 
 // ------------------------------------------------------------------ Fire Rings
 // Each ring is a year (oldest in the centre), each sector a month, clockwise from the top.
 export function rings(el, series, opts = {}) {
-  const { outlook = null, title = "", size = 460, highlight = null } = opts;
+  const { outlook = null, title = "", size = 460, highlight = null, ref = series } = opts;
   const { years, rows } = grid(series);
-  const max = d3.max(rows.flat().filter((v) => v != null)) || 1;
-  const color = colorScale(max);
+  const color = rankScale(ref);
   const svg = d3.select(el).html("").append("svg")
     .attr("viewBox", `${-size / 2} ${-size / 2} ${size} ${size}`)
     .attr("role", "img").attr("direction", "ltr")
@@ -83,10 +100,10 @@ export function rings(el, series, opts = {}) {
 
 // ------------------------------------------------------------------ calendar grid
 export function calendar(el, series, opts = {}) {
-  const { mode = "count", highlight = null } = opts;
+  const { mode = "count", highlight = null, ref = series } = opts;
   const { years, rows } = grid(series);
-  const max = d3.max(rows.flat().filter((v) => v != null)) || 1;
-  let color = colorScale(max);
+  let color = rankScale(ref);
+  const ticks = color.ticks;
   let shown = rows;
   if (mode === "anomaly") { // each month against that month's median over all years
     const med = d3.range(12).map((m) => d3.median(rows.map((r) => r[m]).filter((v) => v != null)) || 0);
@@ -114,18 +131,20 @@ export function calendar(el, series, opts = {}) {
         .on("mouseleave", hideTip);
     });
   });
-  return { max, mode };
+  return { ticks, mode };
 }
 
-export function legend(el, max, mode = "count") {
+// ticks: [lowest, typical, highest] month of the area (count mode)
+export function legend(el, ticks, mode = "count") {
   const w = 220, h = 34;
   const svg = d3.select(el).html("").append("svg").attr("viewBox", `0 0 ${w} ${h}`).attr("direction", "ltr");
   const id = `lg${Math.random().toString(36).slice(2)}`;
   const grad = svg.append("defs").append("linearGradient").attr("id", id);
   d3.range(0, 1.01, 0.1).forEach((k) => grad.append("stop").attr("offset", k)
-    .attr("stop-color", mode === "anomaly" ? d3.interpolatePuOr(1 - k) : d3.interpolateInferno(0.18 + 0.8 * k)));
+    .attr("stop-color", mode === "anomaly" ? d3.interpolatePuOr(1 - k) : d3.interpolateInferno(0.12 + 0.86 * k)));
   svg.append("rect").attr("x", 4).attr("y", 4).attr("width", w - 8).attr("height", 10).attr("rx", 3).attr("fill", `url(#${id})`);
-  const labels = mode === "anomaly" ? t("legendAnom") : ["1", fmt(Math.sqrt(max)), fmt(max)];
+  const labels = mode === "anomaly" ? t("legendAnom")
+    : t("legendRank").map((word, i) => `${word} ${fmt(ticks[i])}`);
   labels.forEach((s, i) => svg.append("text").attr("class", "axis").attr("x", 4 + i * (w - 8) / 2).attr("y", 28)
     .attr("text-anchor", ["start", "middle", "end"][i]).text(s));
 }
