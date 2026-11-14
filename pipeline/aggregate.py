@@ -59,11 +59,15 @@ def scan_one(args):
     df = load_points(sat_name, year)
     df = add_keys(df[df["conf_ok"]])
     marked = df.loc[df["type"].isin([1, 2, 3]), "fine"].unique()
-    months = df.groupby("fine")["mi"].nunique()
-    busy = months[months >= 4].index.values
-    print(f"static scan {sat_name} {year}: {len(busy):,} busy, {len(marked):,} marked", flush=True)
+    g = df.groupby("fine").agg(months=("mi", "nunique"), days=("ymd", "nunique"))
+    busy = g.index[g["months"] >= 4].values
+    # A new flare or plant is caught in its first year too: a vegetation fire does not keep the
+    # same ~1 km spot hot on 30+ days spread over 4+ months (near-real-time data has no type).
+    hot = g.index[(g["months"] >= 4) & (g["days"] >= 30)].values
+    print(f"static scan {sat_name} {year}: {len(busy):,} busy, {len(hot):,} hot all year, {len(marked):,} marked", flush=True)
     return pd.concat([pd.DataFrame({"fine": busy, "year": year, "kind": 0}),
-                      pd.DataFrame({"fine": marked, "year": year, "kind": 1})])
+                      pd.DataFrame({"fine": marked, "year": year, "kind": 1}),
+                      pd.DataFrame({"fine": hot, "year": year, "kind": 2})])
 
 
 def pool():
@@ -77,7 +81,7 @@ def scan_static():
         rows = list(p.map(scan_one, list(sat_years())))
     s = pd.concat(rows, ignore_index=True)
     busy_years = s[s.kind == 0].groupby("fine")["year"].nunique()
-    static = set(busy_years[busy_years >= 3].index) | set(s.loc[s.kind == 1, "fine"])
+    static = set(busy_years[busy_years >= 3].index) | set(s.loc[s.kind.isin([1, 2]), "fine"])
     static = np.array(sorted(static), dtype="int64")
     # widen by one bin in every direction
     r, c = static // C.FINE_COLS, static % C.FINE_COLS

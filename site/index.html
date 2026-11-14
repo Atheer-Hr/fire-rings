@@ -3,191 +3,207 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Fire Rings</title>
-  <meta name="description" content="25 years of NASA satellite fire records, repaired into one honest burning calendar: is this fire season normal, and when should we get ready?">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='none' stroke='%23f98e09' stroke-width='3'/%3E%3Ccircle cx='16' cy='16' r='8' fill='none' stroke='%23bc3754' stroke-width='3'/%3E%3Ccircle cx='16' cy='16' r='3' fill='%23fcffa4'/%3E%3C/svg%3E">
+  <title>Fire Calendar</title>
+  <meta name="description" content="Is the fire season in your area normal? 25 years of NASA satellite fire records, corrected so every year compares fairly, with a three-month outlook.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%237C2D12'/%3E%3Cpath d='M16 6c1 4 6 6 6 12a6 6 0 0 1-12 0c0-3 2-5 3-7 0 2 1 3 2 3 0-3-1-5 1-8z' fill='%23E9B949'/%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Fraunces:opsz,wght@9..144,600&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Readex+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
-<header class="top">
-  <div class="brand">
-    <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="14" fill="none" stroke="#f98e09" stroke-width="3"/><circle cx="16" cy="16" r="8" fill="none" stroke="#bc3754" stroke-width="3"/><circle cx="16" cy="16" r="3" fill="#fcffa4"/></svg>
-    <div>
-      <h1 data-i18n="title">Fire Rings</h1>
-      <p data-i18n="tagline">From firefighting to fire-readiness</p>
-    </div>
+<header class="topbar">
+  <div class="topbar-in glass wrap">
+    <a class="brand" href="#top" aria-label="Fire Calendar">
+      <span class="brand-mark"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5c.8 3.4 5.4 5.5 5.4 10.9A5.4 5.4 0 0 1 6.6 13.4c0-2.8 1.5-4.4 2.5-6 .2 1.8 1 2.9 2 3.2-.3-2.9.1-5.4.9-8.1z" fill="currentColor"/></svg></span>
+      <span class="brand-text"><b data-i18n="title">Fire Calendar</b><small data-i18n="tagline"></small></span>
+    </a>
+    <nav class="nav">
+      <a href="#area" data-i18n="navArea">Your area</a>
+      <a href="#ready" data-i18n="navReady">Readiness list</a>
+      <a href="#world" data-i18n="navWorld">World map</a>
+      <a href="#trust" data-i18n="navTrust">Why trust it</a>
+    </nav>
+    <button class="btn btn-outline btn-sm" id="lang" data-i18n="langSwitch">العربية</button>
   </div>
-  <nav>
-    <button class="link" data-open="about" data-i18n="howItWorks">How it works</button>
-    <button class="link" data-open="model" data-i18n="modelCard">Model card</button>
-    <button class="btn ghost lang" id="lang" data-i18n="langSwitch">العربية</button>
-  </nav>
 </header>
 
-<!-- Chapter 1: the problem, and the fix -->
-<section class="hero" id="story">
-  <div class="hero-text">
-    <p class="kicker" data-i18n="ch1Kicker">Chapter 1 · The problem</p>
-    <h2 data-i18n="ch1Title">Trees record their age in rings. The Earth records its fires.</h2>
-    <p class="lead" data-i18n="ch1Lead"></p>
-    <div class="bignum" aria-live="polite">
-      <div class="stat bad"><span class="num" id="statRaw">+0%</span><span data-i18n="statRawLabel"></span></div>
-      <div class="arrow" aria-hidden="true">→</div>
-      <div class="stat good"><span class="num" id="statFix">0%</span><span data-i18n="statFixLabel"></span></div>
+<main id="top">
+  <!-- 1 · one question -->
+  <section class="hero wrap" id="area">
+    <p class="kicker" data-i18n="heroKicker"></p>
+    <h1 data-i18n="heroTitle">Is the fire season in your area normal?</h1>
+    <p class="lead" data-i18n="heroLead"></p>
+    <div class="ask">
+      <select id="preset" aria-label="Area"></select>
     </div>
-    <div class="row wrap">
-      <button id="grow" class="btn" data-i18n="growBtn">▶ Watch the record grow</button>
-      <a class="btn ghost" href="#explore" data-i18n="toMap">Find your area ↓</a>
+    <div class="quick"><span class="muted small" data-i18n="pickHint"></span><span id="quick"></span></div>
+    <a class="linklike small" href="#world" data-i18n="orMap"></a>
+  </section>
+
+  <!-- 2 · the answer -->
+  <section class="answer wrap" id="answer" hidden aria-live="polite">
+    <div class="area-head">
+      <h2 id="areaName"></h2>
+      <p class="muted" id="areaMeta"></p>
     </div>
-    <p class="caption" id="growCaption" aria-live="polite"></p>
-  </div>
-  <figure class="hero-rings">
-    <div id="heroBA"></div>
-    <figcaption>
-      <b data-i18n="dragTitle">↔ Drag across the rings</b>
-      <span data-i18n="dragHint"></span>
-    </figcaption>
-  </figure>
-</section>
+    <div class="answer-grid">
+      <article class="wx" id="forecastCard" aria-label="Fire forecast"></article>
+      <article class="card verdict" id="verdict"></article>
+    </div>
 
-<!-- Chapters 2 and 3: the map and your area -->
-<section class="chapter-head" id="explore">
-  <p class="kicker" data-i18n="ch2Kicker">Chapter 2 · When does Earth burn?</p>
-  <h2 data-i18n="ch2Title">Every place has its own fire calendar</h2>
-  <p class="muted" data-i18n="ch2Lead"></p>
-</section>
+    <div class="tabs" role="tablist">
+      <button role="tab" class="tab on" data-tab="history" data-i18n="tabHistory">When does it burn?</button>
+      <button role="tab" class="tab" data-tab="trust" data-i18n="tabTrust">Why trust the numbers?</button>
+      <button role="tab" class="tab" data-tab="expert" data-i18n="tabExpert">For specialists</button>
+    </div>
 
-<main class="layout">
-  <section class="mapside">
-    <div class="controls">
-      <div class="row between">
-        <div class="seg" role="group">
-          <button class="on" data-map="amount" data-i18n="mapAmount">How much</button>
-          <button data-map="when" data-i18n="mapWhen">When</button>
+    <div class="tabpanel" data-panel="history">
+      <div class="grid-2">
+        <article class="card">
+          <h3 data-i18n="ringsTitle"></h3>
+          <p class="muted small" data-i18n="ringsHelp"></p>
+          <div id="rings" class="rings"></div>
+          <div id="ringLegend" class="legend"></div>
+          <p class="means" id="ringsMeans"></p>
+        </article>
+        <div class="stack">
+          <article class="card">
+            <h3 data-i18n="outlookTitle"></h3>
+            <div id="outlook"></div>
+            <p class="small muted"><span class="key k-exp"></span> <span data-i18n="expected"></span> <span class="key k-range"></span> <span data-i18n="likelyRange"></span> <span class="key k-usual"></span> <span data-i18n="usual"></span></p>
+            <p class="note" id="outlookNote"></p>
+          </article>
+          <article class="card">
+            <h3 data-i18n="seasonTitle"></h3>
+            <div id="season"></div>
+            <p class="means" id="seasonNote"></p>
+          </article>
         </div>
-        <button id="wave" class="btn ghost" data-i18n="waveBtn">▶ Fire wave</button>
       </div>
-      <label class="field">
-        <span data-i18n="areaOfInterest">Area of interest</span>
-        <select id="preset"></select>
-      </label>
-      <div class="row">
-        <button id="draw" class="btn" data-i18n="drawBox">Draw a box on the map</button>
-        <button id="compare" class="btn ghost" data-i18n="compareWith" data-i18n-title="compareTitle">Compare with…</button>
+      <article class="card">
+        <div class="card-head">
+          <h3 data-i18n="calTitle"></h3>
+          <div class="seg" role="group">
+            <button class="on" data-cal="count" data-i18n="calCount"></button>
+            <button data-cal="anomaly" data-i18n="calAnom"></button>
+          </div>
+        </div>
+        <div id="calendar" class="calendar"></div>
+        <div id="calLegend" class="legend"></div>
+      </article>
+    </div>
+
+    <div class="tabpanel" data-panel="trust" hidden>
+      <div class="grid-2">
+        <article class="card glasses">
+          <h3 data-i18n="glassesTitle"></h3>
+          <ol id="glasses"></ol>
+          <div class="ba-wrap"><div id="areaBA"></div></div>
+          <p class="small muted center"><b data-i18n="dragTitle"></b> · <span data-i18n="dragHint"></span></p>
+        </article>
+        <article class="card">
+          <h3 data-i18n="recordTitle"></h3>
+          <div id="record"></div>
+          <div class="keys small">
+            <span><i class="sw l-naive"></i><span data-i18n="kNaive"></span></span>
+            <span><i class="sw l-modis"></i><span data-i18n="kModis"></span></span>
+            <span><i class="sw l-viirs"></i><span data-i18n="kViirs"></span></span>
+            <span><i class="sw l-harm"></i><span data-i18n="kHarm"></span></span>
+          </div>
+          <p class="means" id="recordNote"></p>
+        </article>
       </div>
+    </div>
+
+    <div class="tabpanel" data-panel="expert" hidden>
+      <div class="grid-2">
+        <article class="card">
+          <h3 data-i18n="recurTitle"></h3>
+          <p class="note" id="recurNote"></p>
+        </article>
+        <article class="card">
+          <h3 data-i18n="humanTitle"></h3>
+          <div id="weekday"></div>
+          <p class="note" id="weekNote"></p>
+        </article>
+      </div>
+      <article class="card">
+        <h3 data-i18n="download"></h3>
+        <div class="row wrapline">
+          <label class="field small"><span data-i18n="from"></span><select id="from"></select></label>
+          <label class="field small"><span data-i18n="to"></span><select id="to"></select></label>
+          <button class="btn btn-primary btn-sm" id="dlMonthly" data-i18n="dlMonthly"></button>
+          <button class="btn btn-outline btn-sm" id="dlCells" data-i18n="dlCells"></button>
+          <button class="btn btn-outline btn-sm" id="dlRings" data-i18n="dlRings"></button>
+        </div>
+        <p class="small muted" data-i18n="dataNote"></p>
+        <p class="small"><button class="linklike" data-open="about" data-i18n="howItWorks"></button> · <button class="linklike" data-open="model" data-i18n="modelCard"></button></p>
+      </article>
+    </div>
+  </section>
+
+  <!-- 3 · readiness list -->
+  <section class="zone" id="ready">
+    <div class="wrap">
+      <p class="kicker" data-i18n="readyKicker"></p>
+      <h2 data-i18n="readyTitle"></h2>
+      <p class="lead" data-i18n="readyLead"></p>
+      <div class="ready" id="readyList"></div>
+      <p class="small muted" data-i18n="readyNote"></p>
+    </div>
+  </section>
+
+  <!-- 4 · world map -->
+  <section class="wrap section" id="world">
+    <p class="kicker" data-i18n="worldKicker"></p>
+    <h2 data-i18n="worldTitle"></h2>
+    <p class="lead" data-i18n="worldLead"></p>
+    <div class="maptools">
+      <div class="seg" role="group">
+        <button class="on" data-map="amount" data-i18n="mapAmount"></button>
+        <button data-map="when" data-i18n="mapWhen"></button>
+      </div>
+      <button id="wave" class="btn btn-outline btn-sm" data-i18n="waveBtn"></button>
+      <button id="draw" class="btn btn-primary btn-sm" data-i18n="drawBox"></button>
       <details class="coords">
-        <summary data-i18n="typeCoords">Or type coordinates</summary>
+        <summary class="btn btn-ghost btn-sm" data-i18n="typeCoords"></summary>
         <div class="row">
-          <label class="field small"><span data-i18n="latitude">Latitude</span><input id="lat" type="number" step="0.01" placeholder="18.2"></label>
-          <label class="field small"><span data-i18n="longitude">Longitude</span><input id="lon" type="number" step="0.01" placeholder="42.5"></label>
-          <label class="field small"><span data-i18n="radius">Radius km</span><input id="rad" type="number" value="50" min="10" max="1000"></label>
-          <button id="go" class="btn" data-i18n="go">Go</button>
+          <label class="field small"><span data-i18n="latitude"></span><input id="lat" type="number" step="0.01" placeholder="18.2"></label>
+          <label class="field small"><span data-i18n="longitude"></span><input id="lon" type="number" step="0.01" placeholder="42.5"></label>
+          <label class="field small"><span data-i18n="radius"></span><input id="rad" type="number" value="50" min="10" max="1000"></label>
+          <button id="go" class="btn btn-primary btn-sm" data-i18n="go"></button>
         </div>
       </details>
     </div>
-    <div class="mapwrap">
+    <div class="mapwrap card">
       <div id="map"></div>
       <div class="map-month" id="mapMonth" hidden></div>
       <div class="when-legend" id="whenLegend" hidden></div>
     </div>
-    <p class="hint" id="hint" data-i18n="mapHint">Map shows total harmonized hotspots per 25 km cell.</p>
+    <p class="hint small muted" id="hint" data-i18n="mapHint"></p>
   </section>
 
-  <section class="report" id="report" aria-live="polite">
-    <p class="kicker" data-i18n="ch3Kicker">Chapter 3 · Your area</p>
-    <div class="empty" id="empty">
-      <h2 data-i18n="emptyTitle">Is this fire season normal?</h2>
-      <p data-i18n="emptyText"></p>
-      <div class="quick" id="quick"></div>
-    </div>
-
-    <div id="content" hidden>
-      <div class="area-head">
-        <h2 id="areaName"></h2>
-        <p class="muted" id="areaMeta"></p>
-      </div>
-
-      <article class="wx" id="forecastCard" aria-label="Fire Forecast"></article>
-
-      <article class="card verdict" id="verdict"></article>
-
-      <article class="card">
-        <h3 data-i18n="ringsTitle">Fire Rings</h3>
-        <p class="muted small" data-i18n="ringsHelp"></p>
-        <div class="rings-wrap" id="ringsWrap"><div id="rings"></div><div id="rings2" class="rings" hidden></div></div>
-        <div id="ringLegend" class="legend"></div>
-        <p class="means" id="ringsMeans"></p>
-      </article>
-
-      <div class="two">
-        <article class="card">
-          <h3 data-i18n="outlookTitle">Next three months</h3>
-          <div id="outlook"></div>
-          <p class="small muted"><span class="key k-exp"></span> <span data-i18n="expected"></span> <span class="key k-range"></span> <span data-i18n="likelyRange"></span> <span class="key k-usual"></span> <span data-i18n="usual"></span></p>
-          <p class="note" id="outlookNote"></p>
-        </article>
-        <article class="card">
-          <h3 data-i18n="seasonTitle">Is the season moving?</h3>
-          <div id="season"></div>
-          <p class="means" id="seasonNote"></p>
-        </article>
-      </div>
-
-      <article class="card">
-        <h3 data-i18n="recordTitle">The record, repaired</h3>
-        <div id="record"></div>
-        <div class="keys small">
-          <span><i class="sw l-naive"></i><span data-i18n="kNaive"></span></span>
-          <span><i class="sw l-modis"></i><span data-i18n="kModis"></span></span>
-          <span><i class="sw l-viirs"></i><span data-i18n="kViirs"></span></span>
-          <span><i class="sw l-harm"></i><span data-i18n="kHarm"></span></span>
+  <!-- 5 · why trust it -->
+  <section class="zone" id="trust">
+    <div class="wrap trust">
+      <div>
+        <p class="kicker" data-i18n="trustKicker"></p>
+        <h2 data-i18n="trustTitle"></h2>
+        <h3 class="glass-title" data-i18n="glassesTitle"></h3>
+        <ol id="glassesWorld"></ol>
+        <div class="bignum" aria-live="polite">
+          <div class="stat bad"><span class="num" id="statRaw">+0%</span><span data-i18n="statRawLabel"></span></div>
+          <div class="stat good"><span class="num" id="statFix">0%</span><span data-i18n="statFixLabel"></span></div>
         </div>
-        <p class="means" id="recordNote"></p>
-      </article>
-
-      <details class="deeper">
-        <summary data-i18n="deeper">For specialists: calendar, repeat burns, human fingerprint and downloads</summary>
-
-        <article class="card">
-          <div class="card-head">
-            <h3 data-i18n="calTitle">Burning activity calendar</h3>
-            <div class="seg" role="group">
-              <button class="on" data-cal="count" data-i18n="calCount">Hotspots</button>
-              <button data-cal="anomaly" data-i18n="calAnom">Compared with usual</button>
-            </div>
-          </div>
-          <div id="calendar" class="calendar"></div>
-          <div id="calLegend" class="legend"></div>
-        </article>
-
-        <div class="two">
-          <article class="card">
-            <h3 data-i18n="recurTitle">Where it burns again and again</h3>
-            <p class="note" id="recurNote"></p>
-          </article>
-          <article class="card">
-            <h3 data-i18n="humanTitle">Human fingerprint</h3>
-            <div id="weekday"></div>
-            <p class="note" id="weekNote"></p>
-          </article>
-        </div>
-
-        <article class="card downloads">
-          <h3 data-i18n="download">Download</h3>
-          <div class="row wrap">
-            <label class="field small"><span data-i18n="from">From</span><select id="from"></select></label>
-            <label class="field small"><span data-i18n="to">To</span><select id="to"></select></label>
-            <button class="btn" id="dlMonthly" data-i18n="dlMonthly">Monthly record (CSV)</button>
-            <button class="btn" id="dlCells" data-i18n="dlCells">Hotspots by cell (CSV)</button>
-            <button class="btn ghost" id="dlRings" data-i18n="dlRings">Fire Rings (PNG)</button>
-          </div>
-          <p class="small muted" data-i18n="dataNote"></p>
-        </article>
-      </details>
+        <button id="grow" class="btn btn-primary" data-i18n="growBtn"></button>
+        <p class="caption" id="growCaption" aria-live="polite"></p>
+      </div>
+      <figure class="trust-rings">
+        <div id="heroBA"></div>
+        <figcaption class="small muted"><b data-i18n="dragTitle"></b> · <span data-i18n="dragHint"></span></figcaption>
+      </figure>
     </div>
   </section>
 </main>
@@ -197,8 +213,10 @@
 <div id="tooltip" role="tooltip"></div>
 
 <footer class="foot">
-  <p dir="ltr">We acknowledge the use of data and/or imagery from NASA's Fire Information for Resource Management System (FIRMS) (<a href="https://earthdata.nasa.gov/firms">earthdata.nasa.gov/firms</a>), part of NASA's Land, Atmosphere Near real-time Capability for Earth observations (LANCE) (<a href="https://earthdata.nasa.gov/lance">earthdata.nasa.gov/lance</a>) and NASA's Earth Science Data and Information System (ESDIS).</p>
-  <p data-i18n="footBuilt"></p>
+  <div class="wrap">
+    <p dir="ltr">We acknowledge the use of data and/or imagery from NASA's Fire Information for Resource Management System (FIRMS) (<a href="https://earthdata.nasa.gov/firms">earthdata.nasa.gov/firms</a>), part of NASA's Land, Atmosphere Near real-time Capability for Earth observations (LANCE) (<a href="https://earthdata.nasa.gov/lance">earthdata.nasa.gov/lance</a>) and NASA's Earth Science Data and Information System (ESDIS).</p>
+    <p data-i18n="footBuilt"></p>
+  </div>
 </footer>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>

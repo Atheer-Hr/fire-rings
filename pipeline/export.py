@@ -16,6 +16,19 @@ import pandas as pd
 import config as C
 
 
+# Areas for the readiness list and the quick picks. Boxes are approximate (south, north, west, east);
+# names live in the site's translations, keyed by id.
+REGIONS = [
+    ("asir", (17.3, 20.6, 41.4, 44.2)), ("baha-taif", (19.6, 21.6, 40.6, 42.0)),
+    ("jazan", (16.3, 17.9, 42.0, 43.6)), ("najran", (16.8, 19.0, 43.5, 46.0)),
+    ("madinah", (23.0, 26.5, 37.0, 41.5)), ("qassim", (25.5, 27.3, 42.0, 44.7)),
+    ("hail", (26.5, 28.8, 39.5, 43.5)), ("jouf", (29.0, 31.5, 37.5, 40.5)),
+    ("kalimantan", (-4.2, 4.4, 108.6, 119.0)), ("punjab", (28.4, 32.6, 73.8, 77.6)),
+    ("top-end", (-17.5, -11.0, 129.0, 137.0)), ("algeria", (34.6, 37.2, 2.0, 8.7)),
+    ("california", (32.5, 42.0, -124.5, -114.1)), ("amazon", (-13.0, -3.0, -66.0, -46.0)),
+]
+
+
 def r(x, nd=0):
     return np.round(np.nan_to_num(np.asarray(x, dtype="float64")), nd)
 
@@ -91,6 +104,20 @@ def main():
     if outlook is not None:
         world["outlook"] = [{"m": float(outlook[f"m{L}"].sum()), "lo": float(outlook[f"lo{L}"].sum()),
                              "hi": float(outlook[f"hi{L}"].sum())} for L in (1, 2, 3)]
+
+    # per-region monthly record and outlook, so the readiness list needs no tile downloads
+    lat = (cells // C.NCOLS + 0.5) * C.CELL - 90
+    lon = (cells % C.NCOLS + 0.5) * C.CELL - 180
+    regions = []
+    for rid, (s, n, wst, est) in REGIONS:
+        m = (lat >= s) & (lat <= n) & (lon >= wst) & (lon <= est)
+        reg = {"id": rid, "b": {"south": s, "north": n, "west": wst, "east": est},
+               "cells": int(m.sum()), "H": r(mats["H"][m].sum(0)).astype(int).tolist()}
+        if outlook is not None:
+            o = outlook.reindex(cells[m])
+            reg["out"] = [float(r(o[f"m{L}"].sum(), 1)) for L in (1, 2, 3)]
+        regions.append(reg)
+    (C.SITE_DATA / "regions.json").write_text(json.dumps(regions, separators=(",", ":")))
 
     y0, m0 = C.month_of(0)
     y1, m1 = C.month_of(n_months - 1)

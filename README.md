@@ -1,8 +1,8 @@
-# Fire Rings — from firefighting to fire-readiness
+# Fire Calendar — from firefighting to fire-readiness
 
 NASA Space Apps Challenge 2026 · *Harmonization of MODIS and VIIRS Hot Spots* · team ASR Space, Madinah.
 
-Fire Rings harmonizes 25 years of NASA FIRMS active-fire hotspots (MODIS 2000–, VIIRS 2012–) into one
+Fire Calendar harmonizes 25 years of NASA FIRMS active-fire hotspots (MODIS 2000–, VIIRS 2012–) into one
 consistent record, shows it as a burning activity calendar ("Fire Rings": one ring per year, one slice
 per month), says in plain words whether the latest month is normal, and gives a machine-learning
 outlook for the next three months.

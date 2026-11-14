@@ -7,13 +7,13 @@ Field names may differ slightly on the form; match by meaning.
 
 ## Project name
 
-Fire Rings
+Fire Calendar
 
 ---
 
 ## High-level project summary (short)
 
-Satellites have mapped Earth's fires since 2000, but the record is split between MODIS and VIIRS, which cannot be compared directly. Read naively, the record exaggerates burning by over 700% once VIIRS arrives. And MODIS is retiring: Suomi NPP stopped delivering data in November 2026. Fire Rings harmonizes 25 years of NASA FIRMS hotspots into one consistent record, cutting that error to about 2% in a blind test. It turns the record into a burning activity calendar anyone can read: "Fire Rings", drawn like tree rings, plus a weather-style Fire Forecast. For any area on Earth it says whether this season is normal, when the season usually starts, and what the next three months look like. The tool moves fire managers from firefighting to fire-readiness.
+Satellites have mapped Earth's fires since 2000, but the record is split between MODIS and VIIRS, which cannot be compared directly. Read naively, the record exaggerates burning by over 700% once VIIRS arrives. And MODIS is retiring: Suomi NPP stopped delivering data in November 2026. Fire Calendar harmonizes 25 years of NASA FIRMS hotspots into one consistent record, cutting that error to about 2% in a blind test. It turns the record into a burning activity calendar anyone can read: "Fire Calendar", drawn like tree rings, plus a weather-style Fire Forecast. For any area on Earth it says whether this season is normal, when the season usually starts, and what the next three months look like. The tool moves fire managers from firefighting to fire-readiness.
 
 ---
 
@@ -33,7 +33,7 @@ https://atheer-hr.github.io/fire-rings
 
 **The problem.** Fire managers need two answers every year: *when does our fire season start?* and *is what we see now normal or dangerous?* Both depend on comparing today with the past, and NASA's satellite fire record is split. MODIS (Terra 2000, Aqua 2002) detects fires at 1 km. VIIRS (Suomi NPP 2012, NOAA-20 2018, NOAA-21 2023) detects them at 375 m and catches far smaller fires. More than half (56%) of VIIRS detections are fires too small for MODIS to see. Put side by side, burning appears to explode after 2012. The Earth did not change; the camera did. With MODIS near the end of its life and Suomi NPP data delivery stopped in November 2026, 25 years of history risk becoming impossible to compare with the future.
 
-**What Fire Rings does.**
+**What Fire Calendar does.**
 
 1. **Cleans the record.** It keeps nominal and high confidence detections only, and removes gas flares, industry and volcanoes. That includes sources NASA marks and those it labels as vegetation: any ~1 km spot that is hot in 4+ months of a year, in 3+ years, is treated as a permanent heat source. This matters in places like Saudi Arabia, where oil-field flares are recorded as fires.
 
@@ -51,12 +51,12 @@ https://atheer-hr.github.io/fire-rings
    * One global ratio reaches 0.92.
    * Using raw VIIRS as if it were MODIS reaches 0.23, with a +718% bias.
 
-4. **Tells the story first.** The site opens with the problem rather than a dashboard. Earth's own Fire Rings sit under a before/after handle the reader drags: on one side the record as published, glowing falsely after 2012, and on the other the repaired record. A "watch the record grow" button replays 2000–2026 ring by ring, naming each satellite change, and then repairs the record in front of the reader. A "When" map colours every place by the month it burns most, and a "fire wave" animates the burning season travelling around the planet.
+4. **Tells the story first.** The site opens with the problem rather than a dashboard. Earth's own Fire Calendar sit under a before/after handle the reader drags: on one side the record as published, glowing falsely after 2012, and on the other the repaired record. A "watch the record grow" button replays 2000–2026 ring by ring, naming each satellite change, and then repairs the record in front of the reader. A "When" map colours every place by the month it burns most, and a "fire wave" animates the burning season travelling around the planet.
 
-5. **Reads it for people.** Choose an area on the map (draw a box, type coordinates, or pick a place), and Fire Rings shows:
+5. **Reads it for people.** Choose an area on the map (draw a box, type coordinates, or pick a place), and Fire Calendar shows:
    * **Fire Forecast.** A weather-app card with the expected hotspots next month, a five-flame risk level, a countdown to the fire season and a "prepare by" date.
    * **Is this normal?** The latest month compared with the median of the same month in earlier years, in one plain sentence ("13× the usual October, highest since 2015").
-   * **Fire Rings.** The burning activity calendar drawn as tree rings: one ring per year, one slice per month, plus a dashed outer ring for the outlook. A before/after handle shows the raw record next to the harmonized one. Colours are relative to the area, so quiet regions show their own peaks.
+   * **Fire Calendar.** The burning activity calendar drawn as tree rings: one ring per year, one slice per month, plus a dashed outer ring for the outlook. A before/after handle shows the raw record next to the harmonized one. Colours are relative to the area, so quiet regions show their own peaks.
    * **Calendar grid.** Colour-blind-safe colours, with a "compared with usual" mode.
    * **Season shift.** Season start, length and trend across 25 years.
    * **Repeat-burn hotspots.** Places that burn in the same month nearly every year, usually planned burning, so prevention teams know where to go.
@@ -76,7 +76,7 @@ https://atheer-hr.github.io/fire-rings
 
 **Who it is for.** Civil defence and firefighters planning crews and aircraft, land managers and afforestation programmes such as the Saudi Green Initiative protecting new trees, health authorities warning before the smoke season, and scientists who need an honest long-term record.
 
-**Impact.** The UN Environment Programme calls on governments to move fire spending from response to prevention and preparedness. Preparedness needs to know *when* and *where*, and that needs a record that does not break every time a satellite retires. Fire Rings works for any area on Earth, needs no expert to read, runs in a browser and is open source.
+**Impact.** The UN Environment Programme calls on governments to move fire spending from response to prevention and preparedness. Preparedness needs to know *when* and *where*, and that needs a record that does not break every time a satellite retires. Fire Calendar works for any area on Earth, needs no expert to read, runs in a browser and is open source.
 
 **Tools.** Python (pandas, NumPy, scikit-learn) for the pipeline. A static website with Leaflet and D3, in English and Arabic, hosted on GitHub Pages.
 

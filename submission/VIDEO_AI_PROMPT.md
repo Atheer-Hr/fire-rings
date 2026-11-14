@@ -1,4 +1,4 @@
-# Fire Rings — prompt for an AI video designer
+# Fire Calendar — prompt for an AI video designer
 
 Copy everything between the two lines into the AI video tool (Runway, Sora, Veo, Kling, Pika, CapCut AI…).
 Shots marked **[SCREEN]** are real screen recordings of the live site; do not let the AI redraw them.
@@ -7,9 +7,9 @@ Shots marked **[SCREEN]** are real screen recordings of the live site; do not le
 
 ## MASTER PROMPT
 
-You are a creative video director. Make a **30-second** explainer video (hard limit: 30 seconds, required by NASA Space Apps) for a project called **Fire Rings**, by team ASR Space from Madinah, Saudi Arabia.
+You are a creative video director. Make a **30-second** explainer video (hard limit: 30 seconds, required by NASA Space Apps) for a project called **Fire Calendar**, by team ASR Space from Madinah, Saudi Arabia.
 
-**The idea in one line:** Trees record their age in rings; the Earth records its fires. NASA satellites have recorded every fire on Earth since 2000, but the record was written by two different cameras (MODIS and VIIRS) that cannot be compared, so the raw record exaggerates fire by 718%. Fire Rings repairs the record (error down to 2%) and turns it into a fire calendar anyone can read, like a weather forecast.
+**The idea in one line:** Trees record their age in rings; the Earth records its fires. NASA satellites have recorded every fire on Earth since 2000, but the record was written by two different cameras (MODIS and VIIRS) that cannot be compared, so the raw record exaggerates fire by 718%. Fire Calendar repairs the record (error down to 2%) and turns it into a fire calendar anyone can read, like a weather forecast.
 
 **Style**
 - Cinematic, warm, and hopeful, not scary.
@@ -24,7 +24,7 @@ You are a creative video director. Make a **30-second** explainer video (hard li
 **Numbers you may show (all real):**
 - 25 years of NASA satellite fire records (2000–2026)
 - 2 sensors: MODIS (1 km) and VIIRS (375 m)
-- Raw record exaggerates fire by **+718%**; Fire Rings error **2%** (tested on 4 years it never saw)
+- Raw record exaggerates fire by **+718%**; Fire Calendar error **2%** (tested on 4 years it never saw)
 - **56%** of fires seen by VIIRS are too small for MODIS
 - ML outlook: **41%** lower error than the best simple method
 
@@ -35,10 +35,10 @@ You are a creative video director. Make a **30-second** explainer video (hard li
 | 0:00–0:04 | **[AI]** Macro shot of a freshly cut tree trunk, sunlight on the growth rings; slow push-in. The rings begin to glow orange like embers. | — | الشجرة تسجّل عمرها في حلقات… | Trees record their age in rings… |
 | 0:04–0:08 | **[AI]** The glowing rings dissolve into Earth seen from space at night; tiny fire dots sparkle across Africa and Asia; two satellites cross the frame (one older, one sleeker). | "2000 → 2026" | …والأرض تسجّل حرائقها. أقمار ناسا تراقبها منذ 25 سنة. | …and the Earth records its fires. NASA satellites have watched for 25 years. |
 | 0:08–0:13 | **[SCREEN]** The site's opening section: press "Watch the record grow"; the rings grow and, at 2012, the outer rings flare bright yellow. Overlay a big red **+718%** with a strike-through. | +718% | لكن كاميرتين مختلفتين… فالسجل يبالغ في الحرائق سبعة أضعاف. | But two different cameras made the record exaggerate fire seven-fold. |
-| 0:13–0:18 | **[SCREEN]** The white line sweeps across the rings and the false glow calms into even colours. Overlay a big green **2%**. Music swell. | 2% | حلقات النار تُصلح السجل… والخطأ اثنان بالمئة فقط. | Fire Rings repairs the record — error down to 2%. |
+| 0:13–0:18 | **[SCREEN]** The white line sweeps across the rings and the false glow calms into even colours. Overlay a big green **2%**. Music swell. | 2% | تقويم الحرائق يُصلح السجل… والخطأ اثنان بالمئة فقط. | Fire Calendar repairs the record — error down to 2%. |
 | 0:18–0:23 | **[SCREEN]** The map switches to "When" and the "Fire wave" plays: colours travel around the planet month by month. | — | لكل مكان على الأرض تقويم نار خاص به… | Every place on Earth has its own fire calendar… |
 | 0:23–0:27 | **[SCREEN]** Click "Asir, Saudi Arabia": the weather-style Fire Forecast card appears with flames and the season countdown. | — | …فتعرف: هل الموسم طبيعي؟ ومتى تستعد؟ | …is this season normal, and when should we get ready? |
-| 0:27–0:30 | **[AI + text]** A small young tree growing on a desert hillside at sunrise (protecting new trees); end card on dark background. | **Fire Rings** · From firefighting to fire-readiness · atheer-hr.github.io/fire-rings · Team ASR Space · NASA Space Apps 2026 | حلقات النار… من الإطفاء إلى الاستعداد. | Fire Rings — from firefighting to fire-readiness. |
+| 0:27–0:30 | **[AI + text]** A small young tree growing on a desert hillside at sunrise (protecting new trees); end card on dark background. | **Fire Calendar** · From firefighting to fire-readiness · atheer-hr.github.io/fire-rings · Team ASR Space · NASA Space Apps 2026 | تقويم الحرائق… من الإطفاء إلى الاستعداد. | Fire Calendar — from firefighting to fire-readiness. |
 
 **Generation prompts for the AI shots**
 

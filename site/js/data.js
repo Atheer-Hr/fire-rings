@@ -189,7 +189,7 @@ export function toCSV(area, name) {
       (area.H[mi] + area.unc[mi]).toFixed(0), area.M[mi].toFixed(0), area.V[mi].toFixed(0),
       area.naive[mi].toFixed(0), src[META.source_by_month[mi]]]);
   }
-  return `# Fire Rings - ${name}\n# Area: ${JSON.stringify(area.box)}\n# Source: NASA FIRMS MODIS C6.1 and VIIRS 375 m active fires, harmonized\n`
+  return `# Fire Calendar - ${name}\n# Area: ${JSON.stringify(area.box)}\n# Source: NASA FIRMS MODIS C6.1 and VIIRS 375 m active fires, corrected (harmonized) by Fire Calendar\n`
     + rows.map((r) => r.join(",")).join("\n");
 }
 

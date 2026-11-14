@@ -1,50 +1,77 @@
+// Fire Calendar — page logic: one question, one answer, details on demand.
 import * as D from "./data.js";
 import * as V from "./charts.js";
 import { t, lang, setLang, applyStatic } from "./i18n.js";
+import { aboutHTML, modelHTML } from "./dialogs.js";
 
 const $ = (s) => document.querySelector(s);
 const fmt = (v) => Math.round(v).toLocaleString("en-US");
-const PRESETS = [
-  { id: "asir-saudi-arabia", b: { south: 17.3, north: 20.6, west: 41.4, east: 44.2 } },
-  { id: "al-baha-taif-saudi-arabia", b: { south: 19.6, north: 21.6, west: 40.6, east: 42.0 } },
-  { id: "kalimantan-indonesia", b: { south: -4.2, north: 4.4, west: 108.6, east: 119.0 } },
-  { id: "punjab-haryana-india", b: { south: 28.4, north: 32.6, west: 73.8, east: 77.6 } },
-  { id: "northern-australia", b: { south: -17.5, north: -11.0, west: 129.0, east: 137.0 } },
-  { id: "northern-algeria", b: { south: 34.6, north: 37.2, west: 2.0, east: 8.7 } },
-  { id: "california-usa", b: { south: 32.5, north: 42.0, west: -124.5, east: -114.1 } },
-  { id: "amazon-brazil", b: { south: -13.0, north: -3.0, west: -66.0, east: -46.0 } },
-];
+const SAUDI = 8;                       // the first 8 regions are in Saudi Arabia
 
-// An area remembers how it was chosen so its name can be shown in either language.
-const state = { area: null, area2: null, src: null, src2: null, rec: "H", cal: "count", compareNext: false };
-let map, boxLayer, box2Layer, recurLayer;
+const state = { area: null, src: null, cal: "count", tab: "history" };
+let REGIONS = [];
+let map, boxLayer, recurLayer, density;
 
+// ---------------------------------------------------------------- names and small helpers
 function areaName(src) {
   if (!src) return "";
-  if (src.preset != null) return t("presets")[src.preset];
+  if (src.region) return t("regions")[src.region] || src.region;
   if (src.point) return `${src.point.lat.toFixed(2)}°, ${src.point.lon.toFixed(2)}° (±${src.point.km} km)`;
   const b = src.b;
   return t("areaBox", { s: b.south.toFixed(1), n: b.north.toFixed(1), w: b.west.toFixed(1), e: b.east.toFixed(1) });
 }
 const shortName = (n) => n.split(/[,،(]/)[0].trim();
-// "23 days" / Arabic counted noun: 3–10 أيام, otherwise يوماً
 const days = (n) => (lang() === "ar" ? (n >= 3 && n <= 10 ? `${n} أيام` : `${n} يوماً`) : `${n} day${n === 1 ? "" : "s"}`);
 
-// ---------------------------------------------------------------- map
+function monthStats(H) {
+  const byMonth = Array.from({ length: 12 }, () => []);
+  for (let mi = 0; mi < H.length; mi++) byMonth[D.ym(mi).month].push(H[mi]);
+  return { median: byMonth.map((v) => D.median(v)), all: Array.from(H) };
+}
+
+// 0..4 from where a monthly count sits among all months of the area's record
+function levelOf(value, allMonths) {
+  if (value < 0.5) return 0;
+  const below = allMonths.filter((v) => v < value).length / Math.max(allMonths.length, 1);
+  return below < 0.4 ? 0 : below < 0.7 ? 1 : below < 0.9 ? 2 : below < 0.97 ? 3 : 4;
+}
+
+// Where the next month falls in the area's usual fire year
+function seasonState(sea, firstMonth) {
+  const recent = sea.years.filter((d) => d.onset != null).slice(-10);
+  if (recent.length < 3) return null;
+  const onset = D.median(recent.map((d) => d.onset)), end = D.median(recent.map((d) => d.end));
+  const d0 = ((firstMonth - sea.start + 12) % 12) * 30.44;
+  if (d0 < onset) return { kind: "before", days: Math.round(onset - d0), onset, end };
+  if (d0 <= end) return { kind: "during", onset, end };
+  return { kind: "after", days: Math.round(onset + 365 - d0), onset, end };
+}
+
+function nextMonths(H, outlook) {
+  const last = D.ym(D.meta().months - 1), st = monthStats(H);
+  return outlook.map((m, k) => {
+    const mo = (last.month + 1 + k) % 12;
+    return { m: mo, year: last.year + Math.floor((last.month + 1 + k) / 12), exp: m, usual: st.median[mo], lvl: levelOf(m, st.all) };
+  });
+}
+
+const FLAME = "M12 2c.8 3.6 5.6 5.7 5.6 11.4A5.6 5.6 0 0 1 6.4 13.4c0-2.9 1.6-4.6 2.6-6.2.2 1.9 1 3 2.1 3.3-.3-3 .1-5.6.9-8.5z";
+const flame = (cls = "") => `<svg viewBox="0 0 24 24" class="flame ${cls}" aria-hidden="true"><path d="${FLAME}"/></svg>`;
+const meter = (lvl) => `<span class="meter" aria-label="${t("levels")[lvl]}">${[0, 1, 2, 3, 4].map((i) => flame(i <= lvl ? "on" : "off")).join("")}</span>`;
+
+// ---------------------------------------------------------------- the map
 function initMap(overview) {
-  map = L.map("map", { worldCopyJump: true, minZoom: 2 }).setView([20, 30], 2);
-  L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}", {
+  map = L.map("map", { worldCopyJump: true, minZoom: 2, scrollWheelZoom: false }).setView([20, 30], 2);
+  L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}", {
     attribution: "Basemap &copy; Esri, HERE, Garmin, &copy; OpenStreetMap contributors", maxZoom: 10,
   }).addTo(map);
-  L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}", {
+  L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}", {
     maxZoom: 10, pane: "shadowPane",
   }).addTo(map);
   const top = D.quantile(overview.total, 0.995);
   const densityColor = V.colorScale(top);
-  // "When" mode: hue = calendar month of the peak (a colour wheel), brightness = how much burns
   const whenColor = (m) => V.d3.interpolateSinebow((m + 0.5) / 12);
   const weight = (v) => Math.min(1, Math.log(Math.max(v, 1)) / Math.log(Math.max(top, 2)));
-  // world fire map on a canvas: ~190,000 cells are too many for SVG markers
   const Density = L.Layer.extend({
     onAdd(m) {
       this._c = L.DomUtil.create("canvas", "density");
@@ -53,7 +80,6 @@ function initMap(overview) {
       this._project();
     },
     onRemove(m) { this._c.remove(); m.off("moveend zoomend resize", this._project, this); },
-    // screen rectangles are recomputed only when the view changes
     _project() {
       const size = map.getSize(), deg = D.meta().cell_deg;
       L.DomUtil.setPosition(this._c, map.containerPointToLayerPoint([0, 0]));
@@ -75,12 +101,12 @@ function initMap(overview) {
       ctx.clearRect(0, 0, this._c.width, this._c.height);
       const wave = mapState.waveMonth;
       for (const [x, y, w, h, i] of this._rects) {
-        if (mapState.mode === "amount") { ctx.globalAlpha = 1; ctx.fillStyle = densityColor(overview.total[i]); }
+        if (mapState.mode === "amount") { ctx.globalAlpha = 0.9; ctx.fillStyle = densityColor(overview.total[i]); }
         else {
           const pk = overview.peak[i];
           ctx.fillStyle = whenColor(pk);
-          const base = 0.25 + 0.75 * weight(overview.total[i]);
-          ctx.globalAlpha = wave == null ? base : pk === wave ? 1 : 0.07;
+          const base = 0.3 + 0.7 * weight(overview.total[i]);
+          ctx.globalAlpha = wave == null ? base : pk === wave ? 1 : 0.06;
         }
         ctx.fillRect(x, y, w, h);
       }
@@ -88,15 +114,16 @@ function initMap(overview) {
     },
   });
   density = new Density().addTo(map);
-  // legend for "When": a strip of the twelve month colours
-  $("#whenLegend").innerHTML = t("monthsLong").map((name, m) =>
-    `<span><i style="background:${whenColor(m)}"></i>${t("months")[m]}</span>`).join("");
+  fillWhenLegend();
   enableDrawing();
 }
 
-// ---------------------------------------------------------------- map modes and the fire wave
+function fillWhenLegend() {
+  $("#whenLegend").innerHTML = t("monthsLong").map((_, m) =>
+    `<span><i style="background:${V.d3.interpolateSinebow((m + 0.5) / 12)}"></i>${t("months")[m]}</span>`).join("");
+}
+
 const mapState = { mode: "amount", waveMonth: null, timer: null };
-let density;
 function setMapMode(mode) {
   mapState.mode = mode;
   document.querySelectorAll("[data-map]").forEach((b) => b.classList.toggle("on", b.dataset.map === mode));
@@ -111,12 +138,7 @@ function toggleWave() {
   $("#wave").textContent = t("waveStop");
   $("#mapMonth").hidden = false;
   let m = 0;
-  const step = () => {
-    mapState.waveMonth = m;
-    $("#mapMonth").textContent = t("monthsLong")[m];
-    density.paint();
-    m = (m + 1) % 12;
-  };
+  const step = () => { mapState.waveMonth = m; $("#mapMonth").textContent = t("monthsLong")[m]; density.paint(); m = (m + 1) % 12; };
   step();
   mapState.timer = setInterval(step, 900);
 }
@@ -137,67 +159,48 @@ function enableDrawing() {
     const bb = L.latLngBounds(start, e.latlng);
     rect.remove(); start = null; armed = false; map.dragging.enable(); $("#map").classList.remove("drawing");
     if (Math.abs(bb.getNorth() - bb.getSouth()) < 0.2 || Math.abs(bb.getEast() - bb.getWest()) < 0.2) { $("#hint").textContent = t("tooSmall"); return; }
-    const b = { south: bb.getSouth(), north: bb.getNorth(), west: bb.getWest(), east: bb.getEast() };
-    choose({ b });
+    choose({ b: { south: bb.getSouth(), north: bb.getNorth(), west: bb.getWest(), east: bb.getEast() } });
   });
 }
 
-function showBox(b, second) {
-  const layer = L.rectangle([[b.south, b.west], [b.north, b.east]], { className: second ? "aoi aoi2" : "aoi" }).addTo(map);
-  if (second) { box2Layer?.remove(); box2Layer = layer; } else { boxLayer?.remove(); boxLayer = layer; box2Layer?.remove(); box2Layer = null; }
-  map.fitBounds(layer.getBounds(), { padding: [30, 30], maxZoom: 7 });
+function showBox(b) {
+  boxLayer?.remove();
+  boxLayer = L.rectangle([[b.south, b.west], [b.north, b.east]], { className: "aoi" }).addTo(map);
 }
 
+// ---------------------------------------------------------------- choose an area
 async function choose(src) {
-  const second = state.compareNext && state.area;
-  state.compareNext = false;
-  $("#compare").classList.remove("on");
-  showBox(src.b, second);
-  $("#hint").textContent = t("loading");
+  showBox(src.b);
+  $("#answer").hidden = false;
+  $("#areaName").textContent = areaName(src);
+  $("#areaMeta").textContent = t("loading");
+  $("#answer").scrollIntoView({ behavior: "smooth", block: "start" });
   const area = await D.selectArea(src.b);
-  if (second) { state.area2 = area; state.src2 = src; } else { state.area = area; state.src = src; state.area2 = null; state.src2 = null; }
-  $("#hint").textContent = t("cellsSelected", { n: area.cells.length });
+  state.area = area; state.src = src;
+  if (src.region) $("#preset").value = src.region;
   render();
 }
 
-// ---------------------------------------------------------------- statistics helpers
-function monthStats(a) {
-  const n = D.meta().months;
-  const byMonth = Array.from({ length: 12 }, () => []);
-  for (let mi = 0; mi < n; mi++) byMonth[D.ym(mi).month].push(a.H[mi]);
-  return { median: byMonth.map((v) => D.median(v)), all: Array.from(a.H) };
+// ---------------------------------------------------------------- the answer
+function render() {
+  const a = state.area;
+  if (!a) return;
+  const meta = D.meta(), last = meta.months - 1;
+  const total = a.H.reduce((s, v) => s + v, 0);
+  const name = areaName(state.src);
+  $("#areaName").textContent = name;
+  $("#areaMeta").textContent = t("areaMeta", { cells: a.cells.length, from: D.ym(0).year });
+  const sea = D.seasons(Array.from(a.H));
+  renderForecast(a, sea, name);
+  renderVerdict(a, sea, total);
+  renderHistory(a, sea, total, name);
+  renderTrust(a);
+  renderExpert(a, sea, total);
 }
 
-function seasonState(sea, firstMonth) {
-  const recent = sea.years.filter((d) => d.onset != null).slice(-10);
-  if (recent.length < 3) return null;
-  const onset = D.median(recent.map((d) => d.onset)), end = D.median(recent.map((d) => d.end));
-  const d0 = ((firstMonth - sea.start + 12) % 12) * 30.44;   // first day of the outlook, in fire-year days
-  if (d0 < onset) return { kind: "before", days: Math.round(onset - d0), onset, end };
-  if (d0 <= end) return { kind: "during", onset, end };
-  return { kind: "after", days: Math.round(onset + 365 - d0), onset, end };
-}
-
-// 0..4 from where the expected count sits among all months of the record
-function levelOf(value, allMonths) {
-  if (value < 0.5) return 0;
-  const below = allMonths.filter((v) => v < value).length / Math.max(allMonths.length, 1);
-  return below < 0.4 ? 0 : below < 0.7 ? 1 : below < 0.9 ? 2 : below < 0.97 ? 3 : 4;
-}
-
-const FLAME = "M12 2c.8 3.6 5.6 5.7 5.6 11.4A5.6 5.6 0 0 1 6.4 13.4c0-2.9 1.6-4.6 2.6-6.2.2 1.9 1 3 2.1 3.3-.3-3 .1-5.6.9-8.5z";
-const flame = (cls = "") => `<svg viewBox="0 0 24 24" class="flame ${cls}" aria-hidden="true"><path d="${FLAME}"/></svg>`;
-const meter = (lvl) => `<span class="meter" aria-label="${t("levels")[lvl]}">${[0, 1, 2, 3, 4].map((i) => flame(i <= lvl ? "on" : "off")).join("")}</span>`;
-
-// ---------------------------------------------------------------- Fire Forecast card
-function renderForecast(a, sea) {
-  const meta = D.meta(), last = D.ym(meta.months - 1);
-  const stats = monthStats(a);
-  const months = a.outlook.map((o, k) => {
-    const m = (last.month + 1 + k) % 12;
-    const year = last.year + Math.floor((last.month + 1 + k) / 12);
-    return { m, year, exp: o.m, chance: 1 - o.pNone, lvl: levelOf(o.m, stats.all), usual: stats.median[m] };
-  });
+function renderForecast(a, sea, name) {
+  const last = D.ym(D.meta().months - 1);
+  const months = nextMonths(a.H, a.outlook.map((o) => o.m)).map((d, k) => ({ ...d, chance: 1 - a.outlook[k].pNone }));
   const now = months[0];
   const ss = seasonState(sea, now.m);
   let season = "";
@@ -206,11 +209,12 @@ function renderForecast(a, sea) {
   else if (ss?.kind === "after" && now.exp > 2 * Math.max(now.usual, 1) && now.lvl >= 2) season = t("seasonLate");
   else if (ss?.kind === "after") season = t("seasonOff", { date: D.dayToDate(ss.onset, sea.start) });
   const L = t("monthsLong"), S = t("months");
-  $("#forecastCard").className = `wx lvl${now.lvl}`;
-  $("#forecastCard").innerHTML = `
+  const card = $("#forecastCard");
+  card.className = `wx lvl${now.lvl}`;
+  card.innerHTML = `
     <div class="wx-top">
       <div>
-        <p class="wx-place">${shortName(areaName(state.src))}</p>
+        <p class="wx-place">${shortName(name)}</p>
         <p class="wx-sub">${t("fireForecast")} · ${t("issued", { month: `${L[now.m]} ${now.year}`, last: `${S[last.month]} ${last.year}` })}</p>
       </div>
       <button class="wx-save" id="saveCard" title="${t("shareImage")}" aria-label="${t("shareImage")}">⤓</button>
@@ -227,8 +231,7 @@ function renderForecast(a, sea) {
     ${season ? `<p class="wx-season">⏳ ${season}</p>` : ""}
     <div class="wx-days">
       ${months.map((d) => `<div class="wx-day">
-        <span class="wx-dname">${S[d.m]}</span>
-        ${meter(d.lvl)}
+        <span class="wx-dname">${S[d.m]}</span>${meter(d.lvl)}
         <span class="wx-dnum">${fmt(d.exp)}</span>
         <span class="wx-dchance">${d.chance > 0.99 ? t("chanceOver99") : `${Math.round(d.chance * 100)}% ${t("chance")}`}</span>
       </div>`).join("")}
@@ -236,130 +239,57 @@ function renderForecast(a, sea) {
   $("#saveCard").onclick = saveCard;
 }
 
-async function saveCard() {
-  const card = $("#forecastCard");
-  const css = await (await fetch("css/app.css")).text();
-  const w = card.offsetWidth, h = card.offsetHeight, scale = 2;
-  const clone = card.cloneNode(true);
-  clone.querySelector(".wx-save")?.remove();
-  const html = `<div xmlns="http://www.w3.org/1999/xhtml" dir="${document.documentElement.dir}" lang="${lang()}" class="export-root"><style>${css}</style>${clone.outerHTML}</div>`;
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><foreignObject width="100%" height="100%">${html}</foreignObject></svg>`;
-  const img = new Image();
-  img.onload = () => {
-    const c = Object.assign(document.createElement("canvas"), { width: w * scale, height: h * scale });
-    const ctx = c.getContext("2d"); ctx.scale(scale, scale); ctx.drawImage(img, 0, 0);
-    c.toBlob((b) => { const a = document.createElement("a"); a.href = URL.createObjectURL(b); a.download = `fire-forecast-${slug(shortName(areaName(state.src)))}.png`; a.click(); });
-  };
-  img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
-}
-
-// ---------------------------------------------------------------- chapter 1: the story
-// Moments in the satellite record, shown while the tree grows.
-const EVENTS = { 2000: "ev2000", 2002: "ev2002", 2012: "ev2012", 2018: "ev2018", 2026: "ev2026" };
-const hero = { slider: null, growing: false };
-
-function world() {
-  const w = D.meta().world;
-  return { H: w.H, naive: w.naive, M: w.M, V: w.V, unc: w.unc, outlook: w.outlook || null };
-}
-
-function drawHero(upto) {
-  const w = world();
-  hero.slider = V.beforeAfter("#heroBA", {
-    raw: w.naive, harm: w.H, ref: w.H, outlook: w.outlook, title: t("earth"),
-    highlight: D.meta().months - 1, upto, size: 460,
-  });
-}
-
-function countUp(el, to, fmtFn, ms = 1400) {
-  const t0 = performance.now();
-  const tick = (now) => {
-    const k = Math.min(1, (now - t0) / ms), e = 1 - (1 - k) ** 3;
-    el.textContent = fmtFn(to * e);
-    if (k < 1) requestAnimationFrame(tick);
-  };
-  requestAnimationFrame(tick);
-}
-
-function heroStats() {
-  const v = D.meta().harmonize?.validation?.tile_month;
-  if (!v) return;
-  countUp($("#statRaw"), v.baseline_raw_viirs_as_modis.bias_pct, (x) => `+${Math.round(x)}%`);
-  countUp($("#statFix"), Math.abs(v.bridge_viirs_to_modis.bias_pct), (x) => `${x.toFixed(1)}%`, 1800);
-}
-
-async function grow() {
-  if (hero.growing) return;
-  hero.growing = true;
-  $("#grow").disabled = true;
-  const years = D.grid(D.meta().world.H).years;
-  const cap = $("#growCaption");
-  hero.slider?.set(100);                 // start fully "raw": the record as published
-  for (let k = 1; k <= years.length; k++) {
-    drawHero(k);
-    hero.slider.set(100);
-    const ev = EVENTS[years[k - 1]];
-    if (ev) { cap.innerHTML = `<b>${years[k - 1]}</b> · ${t(ev)}`; cap.classList.add("flash"); }
-    await new Promise((r) => setTimeout(r, ev ? 1700 : 260));
-    cap.classList.remove("flash");
+function renderVerdict(a, sea, total) {
+  const el = $("#verdict");
+  if (total < 30) {
+    el.className = "card verdict v-calm";
+    el.innerHTML = `<h3>${t("littleTitle")}</h3><p>${t("littleText")}</p>`;
+    return;
   }
-  // now repair the record in front of the reader
-  cap.innerHTML = t("evRepair");
-  for (let p = 100; p >= 0; p -= 2) { hero.slider.set(p); await new Promise((r) => setTimeout(r, 30)); }
-  await new Promise((r) => setTimeout(r, 900));
-  for (let p = 0; p <= 50; p += 2) { hero.slider.set(p); await new Promise((r) => setTimeout(r, 25)); }
-  cap.innerHTML = t("evDone");
-  hero.growing = false;
-  $("#grow").disabled = false;
+  const v = D.verdict(Array.from(a.H));
+  const L = t("monthsLong"), mName = L[v.month], yr = D.ym(v.mi).year;
+  const cmp = v.med > 0 ? (v.ratio >= 1 ? t("timesUsual", { x: v.ratio.toFixed(1), month: mName }) : t("pctUsual", { x: Math.round(v.ratio * 100), month: mName }))
+    : t("usuallyNone", { month: mName });
+  const rank = t("rankHigher", { k: v.higher, n: v.years }) + (v.lastTime ? t("lastTime", { y: v.lastTime }) : v.cur > 0 && v.higher === v.years ? t("highest") : "");
+  const recent = sea.years.filter((d) => d.onset != null).slice(-10);
+  const onset = D.median(recent.map((d) => d.onset));
+  el.className = `card verdict v-${v.level}`;
+  el.innerHTML = `
+    <span class="badge b-${v.level}">${t("verdictWords")[v.level]}</span>
+    <p class="verdict-line">${t("verdictLine", { month: mName, year: yr, n: fmt(v.cur), cmp, rank })}</p>
+    ${recent.length >= 3 ? `<p class="prevent">🛡️ ${t("prevention", { a: D.dayToDate(Math.max(0, onset - 42), sea.start), b: D.dayToDate(Math.max(0, onset - 14), sea.start) })}</p>` : ""}`;
 }
 
-// ---------------------------------------------------------------- report
-function render() {
-  const a = state.area;
-  if (!a) return;
-  $("#empty").hidden = true; $("#content").hidden = false;
-  const meta = D.meta(), last = meta.months - 1;
-  const total = a.H.reduce((s, v) => s + v, 0);
-  const name = areaName(state.src), name2 = areaName(state.src2);
-  $("#areaName").textContent = name + (state.area2 ? `  ·  ${name2}` : "");
-  $("#areaMeta").textContent = t("areaMeta", { cells: a.cells.length, total: fmt(total), from: D.label(0), to: D.label(last) });
-
-  const series = a.H;
-  const sea = D.seasons(Array.from(a.H));
-  renderForecast(a, sea);
-  renderVerdict(a, sea, total);
-
-  // rings with the before / after handle; a second area (compare) is shown repaired only
-  V.beforeAfter("#rings", { raw: Array.from(a.naive), harm: Array.from(a.H), ref: a.H, outlook: a.outlook,
-    title: shortName(name), highlight: last });
-  const two = !!state.area2;
-  $("#rings2").hidden = !two;
-  $("#ringsWrap").classList.toggle("pair", two);
-  if (two) V.rings("#rings2", Array.from(state.area2.H),
-    { outlook: state.area2.outlook, title: shortName(name2), highlight: last, ref: state.area2.H });
+function renderHistory(a, sea, total, name) {
+  const last = D.meta().months - 1;
+  V.rings("#rings", Array.from(a.H), { outlook: a.outlook, title: shortName(name), highlight: last, ref: a.H });
   V.legend("#ringLegend", V.rankScale(a.H).ticks, "count");
   const hi = sea.clim.indexOf(Math.max(...sea.clim)), lo = sea.clim.indexOf(Math.min(...sea.clim));
-  $("#ringsMeans").innerHTML = total < 30 ? t("ringsMeansFew")
-    : t("ringsMeans", { area: shortName(name), hi: t("monthsLong")[hi], lo: t("monthsLong")[lo] });
-
-  const cal = V.calendar("#calendar", Array.from(series), { mode: state.cal, highlight: last, ref: a.H });
-  V.legend("#calLegend", cal.ticks, state.cal);
-
-  V.outlookChart("#outlook", a.outlook, monthStats(a).median);
-  const fr = meta.forecast?.holdout?.lead_1;
+  $("#ringsMeans").innerHTML = total < 30 ? t("ringsMeansFew") : t("ringsMeans", { area: shortName(name), hi: t("monthsLong")[hi], lo: t("monthsLong")[lo] });
+  V.outlookChart("#outlook", a.outlook, monthStats(a.H).median);
+  const fr = D.meta().forecast?.holdout?.lead_1;
   if (fr) {
-    const sk = fr.skill_vs_best_baseline_deviance_pct, b = baselineName(fr.best_baseline_deviance);
-    const s = sk >= 0 ? t("outlookBetter", { p: sk.toFixed(0), b }) : t("outlookNotBetter", { b });
-    $("#outlookNote").innerHTML = `${t("outlookTested", { y: meta.forecast.test_year, s })} <button class="link" data-open="model">${t("modelCard")}</button>`;
+    const sk = fr.skill_vs_best_baseline_deviance_pct;
+    const s = sk >= 0 ? t("outlookBetter", { p: sk.toFixed(0) }) : t("outlookNotBetter");
+    $("#outlookNote").innerHTML = `${t("outlookTested", { y: D.meta().forecast.test_year, s })} <button class="linklike" data-open="model">${t("modelCard")}</button>`;
   } else $("#outlookNote").textContent = t("outlookPlain");
-
   const tr = D.trend(sea.years.map((d) => ({ x: d.year, y: d.onset })));
   V.seasonChart("#season", sea, tr);
   $("#seasonNote").textContent = seasonText(sea, tr);
+  const cal = V.calendar("#calendar", Array.from(a.H), { mode: state.cal, highlight: last, ref: a.H });
+  V.legend("#calLegend", cal.ticks, state.cal);
+}
 
+function renderTrust(a) {
+  $("#glasses").innerHTML = t("glasses").map((g) => `<li>${g}</li>`).join("");
+  V.beforeAfter("#areaBA", { raw: Array.from(a.naive), harm: Array.from(a.H), ref: a.H, outlook: a.outlook,
+    title: shortName(areaName(state.src)), highlight: D.meta().months - 1, size: 420 });
   V.record("#record", a);
   $("#recordNote").textContent = recordText(a);
+}
 
+function renderExpert(a, sea, total) {
+  const meta = D.meta();
   const peak = sea.clim.indexOf(Math.max(...sea.clim));
   const rec = D.recurring(a, peak);
   recurLayer?.remove();
@@ -370,44 +300,11 @@ function render() {
   })).addTo(map);
   $("#recurNote").innerHTML = total < 30 ? t("recurFew")
     : t("recurText", { k: rec.filter((c) => c.share >= 0.75).length, n: rec.length, month: t("monthsLong")[peak] });
-
   V.weekdayChart("#weekday", a.wd);
   $("#weekNote").textContent = weekdayText(a.wd);
-
   const years = [...new Set(Array.from({ length: meta.months }, (_, mi) => D.ym(mi).year))];
   for (const id of ["#from", "#to"]) { const sel = $(id); if (!sel.options.length) years.forEach((y) => sel.add(new Option(y, y))); }
   if (!$("#from").dataset.set) { $("#from").value = years[0]; $("#to").value = years.at(-1); $("#from").dataset.set = 1; }
-}
-
-function baselineName(en) {
-  if (lang() !== "ar") return en.toLowerCase();
-  return { "Average of earlier years": "متوسط السنوات السابقة", "Median of earlier years": "وسيط السنوات السابقة",
-    "Same month last year": "نفس الشهر من السنة الماضية", "This month repeats": "تكرار الشهر الحالي" }[en] || en;
-}
-
-function renderVerdict(a, sea, total) {
-  const v = D.verdict(Array.from(a.H));
-  const L = t("monthsLong"), mName = L[v.month], yr = D.ym(v.mi).year;
-  const el = $("#verdict");
-  if (total < 30) {
-    el.className = "card verdict v-calm";
-    el.innerHTML = `<p class="tag">${t("littleTag")}</p><h3>${t("littleTitle", { a: D.ym(0).year, b: yr })}</h3><p>${t("littleText")}</p>`;
-    return;
-  }
-  const cmp = v.med > 0 ? (v.ratio >= 1 ? t("timesUsual", { x: v.ratio.toFixed(1), month: mName }) : t("pctUsual", { x: Math.round(v.ratio * 100), month: mName }))
-    : t("usuallyNone", { month: mName });
-  const outTotal = a.outlook.reduce((s, x) => s + x.m, 0);
-  const pk = a.outlook.reduce((best, x, k) => (x.m > best.m ? { m: x.m, k } : best), { m: -1, k: 0 });
-  const recent = sea.years.filter((d) => d.onset != null).slice(-10);
-  const onset = D.median(recent.map((d) => d.onset));
-  el.className = `card verdict v-${v.level}`;
-  el.innerHTML = `
-    <p class="tag">${t("latestMonth", { month: mName, year: yr })}</p>
-    <h3>${t("verdictWords")[v.level]}</h3>
-    <p class="big">${t("hotspotsDash", { n: fmt(v.cur), cmp })}</p>
-    <p>${t("higherThan", { k: v.higher, n: v.years, month: mName })}${v.lastTime ? t("lastTime", { y: v.lastTime }) : v.cur > 0 && v.higher === v.years ? t("highest") : ""}</p>
-    <p>${t("nextThree", { n: fmt(outTotal), peak: pk.m > 0 ? t("mostIn", { m: L[(v.month + 1 + pk.k) % 12] }) : "" })}</p>
-    ${recent.length >= 3 ? `<p>${t("prevention", { start: D.dayToDate(onset, sea.start), a: D.dayToDate(Math.max(0, onset - 42), sea.start), b: D.dayToDate(Math.max(0, onset - 14), sea.start) })}</p>` : ""}`;
 }
 
 function seasonText(sea, tr) {
@@ -428,8 +325,7 @@ function recordText(a) {
   const firstV = meta.source_by_month.findIndex((s) => s >= 2);
   if (firstV < 0) return t("recordOne");
   const avg = (arr, from, to) => { let s = 0, n = 0; for (let i = from; i < to; i++) { s += arr[i]; n++; } return n ? (s / n) * 12 : 0; };
-  const span = 36;
-  const jump = (arr) => { const b = avg(arr, Math.max(0, firstV - span), firstV), c = avg(arr, firstV, Math.min(meta.months, firstV + span)); return b ? (c / b - 1) * 100 : 0; };
+  const jump = (arr) => { const b = avg(arr, Math.max(0, firstV - 36), firstV), c = avg(arr, firstV, Math.min(meta.months, firstV + 36)); return b ? (c / b - 1) * 100 : 0; };
   const sg = (x) => { const r = Math.round(x); return `${r > 0 ? "+" : ""}${r === 0 ? 0 : r}%`; };
   return t("recordJump", { r: sg(jump(a.naive)), h: sg(jump(a.H)) });
 }
@@ -441,152 +337,146 @@ function weekdayText(wd) {
   const chi = wd.reduce((s, v) => s + (v - exp) ** 2 / exp, 0);
   const hi = wd.indexOf(Math.max(...wd));
   const pct = (wd[hi] / exp - 1) * 100;
-  // With millions of detections any wobble is "significant", and fires burn for days, so
-  // detections are not independent. Only a large, clear excess counts as a weekly rhythm.
+  // large samples make tiny wobbles "significant"; only a clear excess counts
   if (chi < 16.8 || pct < 15) return t("weekNone");
   return t("weekYes", { p: pct.toFixed(0), day: t("days")[hi] });
 }
 
-// ---------------------------------------------------------------- dialogs
+// ---------------------------------------------------------------- readiness list
+function renderReady() {
+  const last = D.ym(D.meta().months - 1);
+  const rows = REGIONS.map((r, i) => {
+    const nm = nextMonths(r.H, r.out || [0, 0, 0])[0];
+    const sea = D.seasons(r.H);
+    const ss = seasonState(sea, nm.m);
+    const ratio = nm.exp / Math.max(nm.usual, 1);
+    let season = "–";
+    if (ss?.kind === "before") season = t("seasonShortBefore", { d: days(ss.days) });
+    else if (ss?.kind === "during") season = t("seasonShortOn");
+    else if (ss?.kind === "after") season = nm.lvl >= 2 && ratio > 2 ? t("seasonShortLate") : t("seasonShortOff");
+    return { ...r, i, nm, ratio, season };
+  });
+  const order = (list) => list.sort((p, q) => q.nm.lvl - p.nm.lvl || q.ratio - p.ratio);
+  const L = t("monthsLong");
+  const table = (title, list) => `
+    <div class="ready-group">
+      <h3>${title}</h3>
+      <div class="ready-head">${t("readyCols").map((c) => `<span>${c}</span>`).join("")}<span></span></div>
+      ${order(list).map((r, k) => `
+        <div class="ready-row lvl${r.nm.lvl}">
+          <span class="ready-name"><b class="rank">${k + 1}</b>${t("regions")[r.id]}</span>
+          <span>${meter(r.nm.lvl)} <small>${t("levels")[r.nm.lvl]}</small></span>
+          <span class="numcell">${fmt(r.nm.exp)}${r.ratio >= 1.5 && r.nm.exp >= 3 ? ` <em class="up">×${r.ratio.toFixed(1)}</em>` : ""}</span>
+          <span class="numcell muted">${fmt(r.nm.usual)}</span>
+          <span class="muted">${r.season}</span>
+          <span><button class="btn btn-outline btn-sm" data-region="${r.id}">${t("readyOpen")}</button></span>
+        </div>`).join("")}
+    </div>`;
+  $("#readyList").innerHTML = `<p class="small muted">${L[(last.month + 1) % 12]} ${last.year + (last.month === 11 ? 1 : 0)}</p>`
+    + table(t("groupSaudi"), rows.slice(0, SAUDI)) + table(t("groupWorld"), rows.slice(SAUDI));
+  document.querySelectorAll("[data-region]").forEach((b) => b.onclick = () => openRegion(b.dataset.region));
+}
+
+function openRegion(id) {
+  const r = REGIONS.find((x) => x.id === id);
+  if (r) choose({ region: id, b: r.b });
+}
+
+// ---------------------------------------------------------------- trust section (whole Earth)
+const EVENTS = { 2000: "ev2000", 2002: "ev2002", 2012: "ev2012", 2018: "ev2018", 2026: "ev2026" };
+const hero = { slider: null, growing: false, counted: false };
+function drawHero(upto) {
+  const w = D.meta().world;
+  hero.slider = V.beforeAfter("#heroBA", { raw: w.naive, harm: w.H, ref: w.H, outlook: w.outlook, title: t("earth"),
+    highlight: D.meta().months - 1, upto, size: 460 });
+}
+function countUp(el, to, fmtFn, ms = 1400) {
+  const t0 = performance.now();
+  const tick = (now) => { const k = Math.min(1, (now - t0) / ms), e = 1 - (1 - k) ** 3; el.textContent = fmtFn(to * e); if (k < 1) requestAnimationFrame(tick); };
+  requestAnimationFrame(tick);
+}
+function heroStats() {
+  const v = D.meta().harmonize?.validation?.tile_month;
+  if (!v || hero.counted) return;
+  hero.counted = true;
+  countUp($("#statRaw"), v.baseline_raw_viirs_as_modis.bias_pct, (x) => `+${Math.round(x)}%`);
+  countUp($("#statFix"), Math.abs(v.bridge_viirs_to_modis.bias_pct), (x) => `${x.toFixed(1)}%`, 1800);
+}
+async function grow() {
+  if (hero.growing) return;
+  hero.growing = true; $("#grow").disabled = true;
+  const years = D.grid(D.meta().world.H).years, cap = $("#growCaption");
+  for (let k = 1; k <= years.length; k++) {
+    drawHero(k); hero.slider.set(100);
+    const ev = EVENTS[years[k - 1]];
+    if (ev) { cap.innerHTML = `<b>${years[k - 1]}</b> · ${t(ev)}`; cap.classList.add("flash"); }
+    await new Promise((r) => setTimeout(r, ev ? 1700 : 260));
+    cap.classList.remove("flash");
+  }
+  cap.innerHTML = t("evRepair");
+  for (let p = 100; p >= 0; p -= 2) { hero.slider.set(p); await new Promise((r) => setTimeout(r, 30)); }
+  await new Promise((r) => setTimeout(r, 900));
+  for (let p = 0; p <= 50; p += 2) { hero.slider.set(p); await new Promise((r) => setTimeout(r, 25)); }
+  cap.innerHTML = t("evDone");
+  hero.growing = false; $("#grow").disabled = false;
+}
+
+// ---------------------------------------------------------------- dialogs, downloads, images
 function openSheet(id) {
-  const meta = D.meta(), d = $(`#${id}`);
-  d.innerHTML = id === "about" ? aboutHTML(meta) : modelHTML(meta);
+  const d = $(`#${id}`);
+  d.innerHTML = id === "about" ? aboutHTML(D.meta()) : modelHTML(D.meta());
   d.showModal();
   d.querySelector(".close")?.addEventListener("click", () => d.close());
 }
-const pct = (x) => (x == null ? "–" : `${(x * 100).toFixed(0)}%`);
-const num = (x, d = 2) => (x == null ? "–" : x.toFixed(d));
-
-function validationTable(h) {
-  const val = h.validation?.tile_month;
-  if (!val) return `<p class='muted'>${lang() === "ar" ? "يظهر الاختبار بعد معالجة بيانات VIIRS." : "Validation appears once VIIRS data is processed."}</p>`;
-  const ar = lang() === "ar";
-  const row = (name, r) => `<tr><td>${name}</td><td>${num(r.r2_log)}</td><td>${num(r.bias_pct, 1)}%</td></tr>`;
-  return `<table><tr><th>${ar ? "اختبار على مستوى المنطقة والشهر" : "Region-month test"}</th><th>R² (log)</th><th>${ar ? "الانحياز" : "Bias"}</th></tr>
-    ${row(ar ? "MODIS ← تفاصيل VIIRS (استرجاع الماضي)" : "MODIS → VIIRS detail (back-cast)", val.backcast_modis_to_viirs)}
-    ${row(ar ? "VIIRS ← بعين MODIS (الجسر)" : "VIIRS → MODIS eyes (bridge)", val.bridge_viirs_to_modis)}
-    ${row(ar ? "مقارنة: نسبة عالمية واحدة" : "Baseline: one global ratio", val.baseline_single_global_ratio)}
-    ${row(ar ? "مقارنة: VIIRS الخام كأنه MODIS" : "Baseline: raw VIIRS used as MODIS", val.baseline_raw_viirs_as_modis)}</table>`;
-}
-
-function aboutHTML(meta) {
-  const h = meta.harmonize || {}, tr = h.validation?.train_years || [], te = h.validation?.test_years || [];
-  const span = `${D.label(0)} – ${D.label(meta.months - 1)}`;
-  if (lang() === "ar") return `<button class="close" aria-label="إغلاق">×</button>
-  <h2>كيف تعمل حلقات النار</h2>
-  <p class="lead">الأقمار الصناعية تراقب حرائق الأرض منذ 2000، لكن السجل كتبته كاميرات مختلفة. MODIS (على Terra منذ 2000 وAqua منذ 2002) يرى الحرائق بدقة 1 كم. وVIIRS (على Suomi NPP منذ 2012 وNOAA-20 منذ 2018 وNOAA-21 منذ 2023) يرى بدقة 375 م ويلتقط حرائق أصغر بكثير. إذا وُضعا جنباً إلى جنب يبدو أن الحرائق انفجرت بعد 2012، لكن الأرض لم تتغير، الكاميرا هي التي تغيرت. وMODIS في نهاية عمره، وتوقف تسليم بيانات Suomi NPP في نوفمبر 2026، فبدون جسر لا يمكن مقارنة 25 سنة من التاريخ بالمستقبل.</p>
-  <h3>١ · التنظيف</h3>
-  <p>نُبقي الرصدات ذات الثقة المتوسطة والعالية فقط. ونحذف شعلات الغاز والمصانع والبراكين، سواء التي تحددها ناسا أو التي تصنّفها خطأً كنبات: أي بقعة بحجم ~1 كم تبقى ساخنة 4 أشهر أو أكثر في السنة، لمدة 3 سنوات أو أكثر، تُعامل كمصدر حرارة دائم.</p>
-  <h3>٢ · جعل كل السنوات قابلة للمقارنة</h3>
-  <ul>
-    <li><b>MODIS يكسب قمراً ثانياً في 2002.</b> أشهر Terra وحده تُعدَّل بنسبة (Terra+Aqua)/Terra المتعلَّمة من السنوات اللاحقة.</li>
-    <li><b>VIIRS يطير على قمر إلى ثلاثة أقمار.</b> نأخذ متوسط كل قمر، فالقمر الجديد ليس اتجاهاً جديداً.</li>
-    <li><b>VIIRS يرى حرائق أصغر.</b> جسران يُدرَّبان على السنوات التي يعمل فيها الحسّاسان معاً. <i>فيزيائي:</i> نجمع بكسلات VIIRS في مربعات 1 كم لكل مرور، ونحذف الأضعف مما يستطيع MODIS رؤيته (أفضل حد: ${h.frp_threshold_mw ?? "–"} ميغاواط). <i>إحصائي:</i> نسبة لكل منطقة 5° ولكل شهر، تُسحب نحو قيمة المنطقة الأكبر حين تقل الحرائق.</li>
-  </ul>
-  <p>السجل معروض بتفاصيل VIIRS: أعداد VIIRS الحقيقية حيث يوجد، وMODIS محوَّلاً لتفاصيل VIIRS قبل ذلك، مع ظل لهامش الثقة. ${h.small_fire_share != null ? `نحو <b>${pct(h.small_fire_share)}</b> من رصدات VIIRS حرائق أصغر من أن يراها MODIS.` : ""}</p>
-  <h3>٣ · الإثبات</h3>
-  <p>نتظاهر أن MODIS توقف مبكراً: نُدرّب الجسرين على ${tr[0] ?? ""}–${tr.at(-1) ?? ""} فقط، ثم نعيد بناء ${te.join("، ")} دون أن نراها.</p>
-  ${validationTable(h)}
-  <h3>٤ · القراءة</h3>
-  <p>التقويم يقارن كل شهر بوسيط نفس الشهر في السنوات السابقة. بداية الموسم هي اليوم الذي تحدث فيه 10% من حرائق السنة، والسنة تبدأ من أهدأ شهر في المنطقة، حتى لا تنقسم المواسم التي تعبر رأس السنة.</p>
-  <h3>ما لا ندّعيه</h3>
-  <p>لا نتنبأ بمكان أو لحظة اشتعال حريق معين، فأغلب الحرائق يشعلها الإنسان. نحن نتنبأ <i>بالفترات الحرجة</i>: متى يأتي موسم الخطر، وهل هذه السنة غير عادية.</p>
-  <p class="small muted">البيانات: ناسا FIRMS (MODIS الإصدار 6.1، وVIIRS بدقة 375 م). السجل: ${span}.</p>`;
-  return `<button class="close" aria-label="Close">×</button>
-  <h2>How Fire Rings works</h2>
-  <p class="lead">Satellites have watched Earth's fires since 2000, but the record was written by different cameras. MODIS (Terra 2000, Aqua 2002) sees fires at 1 km. VIIRS (Suomi NPP 2012, NOAA-20 2018, NOAA-21 2023) sees at 375 m and catches far smaller fires. Put side by side, the record seems to explode after 2012 — but the Earth did not change, the camera did. MODIS is near the end of its life and Suomi NPP stopped delivering data in November 2026, so without a bridge, 25 years of history cannot be compared with the future.</p>
-  <h3>1 · Clean</h3>
-  <p>Only nominal and high confidence detections are kept. Gas flares, factories and volcanoes are removed — both those NASA marks and those it labels as vegetation: any ~1 km spot that is hot in 4+ months of a year, in 3+ years, is treated as a permanent heat source.</p>
-  <h3>2 · Make every year comparable</h3>
-  <ul>
-    <li><b>MODIS gains a second satellite in 2002.</b> Terra-only months are scaled by the Terra+Aqua/Terra ratio learned from later years.</li>
-    <li><b>VIIRS flies on one to three satellites.</b> VIIRS counts are averaged per satellite, so a new satellite is not a new trend.</li>
-    <li><b>VIIRS sees smaller fires.</b> Two bridges are fitted on the years both sensors fly. <i>Physical:</i> VIIRS pixels are merged into 1 km bins per overpass and bins weaker than MODIS can detect are dropped (best cut: ${h.frp_threshold_mw ?? "–"} MW). <i>Statistical:</i> a ratio per 5° region and calendar month, pulled toward the regional value when fires are few.</li>
-  </ul>
-  <p>The record is shown in VIIRS detail: real VIIRS counts where VIIRS exists, MODIS scaled to VIIRS detail before that, with an uncertainty band from resampling years. ${h.small_fire_share != null ? `About <b>${pct(h.small_fire_share)}</b> of VIIRS detections are fires too small for MODIS.` : ""}</p>
-  <h3>3 · Prove it</h3>
-  <p>We pretend MODIS retired early: the bridges are fitted on ${tr[0] ?? ""}–${tr.at(-1) ?? ""} only, then rebuild ${te.join(", ")} without peeking.</p>
-  ${validationTable(h)}
-  <h3>4 · Read it</h3>
-  <p>The calendar compares each month with the median of the same month in earlier years. Season start is the day 10% of a fire year's hotspots have occurred; the fire year starts at the area's quietest month, so tropical seasons that cross New Year stay whole.</p>
-  <h3>What we do not claim</h3>
-  <p>We do not predict where or when a single fire will ignite — most fires are lit by people. We forecast <i>critical periods</i>: when the risk season comes and whether this year is unusual.</p>
-  <p class="small muted">Data: NASA FIRMS (MODIS C6.1, VIIRS 375 m). Record: ${span}.</p>`;
-}
-
-function modelHTML(meta) {
-  const f = meta.forecast || {}, h = f.holdout, ar = lang() === "ar";
-  const rows = h ? [1, 2, 3].map((L) => {
-    const r = h[`lead_${L}`];
-    return `<tr><td>${L}</td><td><b>${num(r.ml.poisson_deviance)}</b></td><td>${num(r.climatology.poisson_deviance)}</td><td>${num(r.climatology_median?.poisson_deviance)}</td><td>${num(r.last_year.poisson_deviance)}</td><td>${num(r.persistence.poisson_deviance)}</td><td>${num(r.ml.auc)}</td><td>${num(r.brier_skill_vs_climatology)}</td><td>${pct(r.range_coverage_80)}</td></tr>`;
-  }).join("") : "";
-  const head = ar
-    ? "<tr><th>أشهر للأمام</th><th>النموذج</th><th>متوسط الماضي</th><th>وسيط الماضي</th><th>السنة الماضية</th><th>تكرار الشهر</th><th>AUC</th><th>مهارة Brier</th><th>إصابة مدى 80%</th></tr>"
-    : "<tr><th>Months ahead</th><th>ML</th><th>Past average</th><th>Past median</th><th>Last year</th><th>This month repeats</th><th>AUC</th><th>Brier skill</th><th>80% range hit</th></tr>";
-  const imp = h?.feature_importance ? `<h3>${ar ? "أكثر الإشارات فائدة" : "Most useful signals"}</h3><ol>${h.feature_importance.slice(0, 6).map((x) => `<li dir="ltr">${x.feature.replaceAll("_", " ")}</li>`).join("")}</ol>` : "";
-  if (ar) return `<button class="close" aria-label="إغلاق">×</button>
-  <h2>بطاقة النموذج · توقع الحرائق</h2>
-  <p class="lead">أشجار قرار معززة (HistGradientBoosting من scikit-learn) تتنبأ لكل خلية نشطة بحجم 25 كم، قبل شهر إلى ثلاثة أشهر: بالعدد المتوقع لنقاط الحرائق الموحَّدة (خسارة بواسون)، وبمدى محتمل (نموذجا الكمّيتين 10% و90%)، وباحتمال حدوث أي حريق (مصنِّف).</p>
-  <h3>على ماذا يعتمد</h3>
-  <p>فقط على ما هو معروف يوم إصدار التوقع: تاريخ الخلية لنفس الشهر في السنوات السابقة، وآخر ثلاثة أشهر، ومدى غرابة السنة حتى الآن، والخلايا المجاورة، ومؤشر النينيو إن توفر. ${f.enso ? "مؤشر النينيو مُضمَّن." : "مؤشر النينيو غير مُضمَّن في هذه النسخة."}</p>
-  <h3>اختبار أعمى على ${f.test_year ?? "آخر سنة كاملة"}</h3>
-  ${h ? `<p>النموذج لم يرَ سنة ${f.test_year} أبداً. الخطأ هو انحراف بواسون لكل خلية وشهر، وهو المقياس المعتاد للأعداد (الأقل أفضل).</p><table>${head}${rows}</table>
-  <p class="small muted">مهارة Brier تقارن احتمالات حريق/لا حريق بالتكرار التاريخي (فوق 0 = أفضل). والمدى المضبوط بنسبة 80% يجب أن يحتوي النتيجة نحو 80% من المرات.</p>${imp}` : "<p class='muted'>يعمل الاختبار الأعمى بعد معالجة سنوات كافية.</p>"}
-  <h3>الحدود</h3>
-  <p>توقعات المنطقة هي مجموع توقعات الخلايا، والمدى المعروض للمنطقة هو مجموع مديات الخلايا فهو واسع. النموذج يتعلم من الماضي ولا يعرف مصدر اشتعال جديداً أو تغييراً مفاجئاً في السياسات.</p>`;
-  return `<button class="close" aria-label="Close">×</button>
-  <h2>Model card · fire outlook</h2>
-  <p class="lead">Gradient-boosted trees (scikit-learn HistGradientBoosting) predict, for every active 25 km cell and 1–3 months ahead: the expected number of harmonized hotspots (Poisson loss), a likely range (10% and 90% quantile models), and the chance of any fire (classifier).</p>
-  <h3>What it looks at</h3>
-  <p>Only information available on the day the outlook is issued: the cell's history for the target month in earlier years, the last three months, how unusual the year has been so far, neighbouring cells, and the El Niño index when available. ${f.enso ? "ENSO is included." : "ENSO is not included in this build."}</p>
-  <h3>Blind test on ${f.test_year ?? "the last full year"}</h3>
-  ${h ? `<p>The model never saw ${f.test_year}. Error is the Poisson deviance per cell and month, the standard score for counts (lower is better).</p><table>${head}${rows}</table>
-  <p class="small muted">Brier skill compares fire / no-fire probabilities with the historical frequency (above 0 = better). A well-calibrated 80% range should contain the outcome about 80% of the time.</p>${imp}`
-    : "<p class='muted'>The blind test runs once enough years are processed.</p>"}
-  <h3>Limits</h3>
-  <p>Area outlooks add up cell forecasts; the range shown for an area adds up cell ranges and is therefore generous. The model learns from the past and cannot know about a new ignition source or an unusual policy change.</p>`;
-}
-
-// ---------------------------------------------------------------- downloads
-function download(name, text, type = "text/csv") {
+function download(name, text) {
   const a = document.createElement("a");
-  a.href = URL.createObjectURL(new Blob([text], { type }));
+  a.href = URL.createObjectURL(new Blob([text], { type: "text/csv" }));
   a.download = name; a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 const slug = (s) => s.toLowerCase().replace(/[^a-z0-9؀-ۿ]+/g, "-").replace(/^-|-$/g, "") || "area";
-const fileName = () => (state.src?.preset != null ? PRESETS[state.src.preset].id : slug(areaName(state.src)));
-
+const fileName = () => state.src?.region || slug(areaName(state.src));
 function monthRange() {
   const from = +$("#from").value, to = +$("#to").value;
   let a = 0, b = D.meta().months - 1;
   for (let mi = 0; mi < D.meta().months; mi++) { const y = D.ym(mi).year; if (y < from) a = mi + 1; if (y <= to) b = mi; }
   return [a, b];
 }
-
+async function saveCard() {
+  const card = $("#forecastCard");
+  const css = await (await fetch("css/app.css")).text();
+  const w = card.offsetWidth, h = card.offsetHeight, scale = 2;
+  const clone = card.cloneNode(true);
+  clone.querySelector(".wx-save")?.remove();
+  const html = `<div xmlns="http://www.w3.org/1999/xhtml" dir="${document.documentElement.dir}" lang="${lang()}"><style>${css}</style>${clone.outerHTML}</div>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><foreignObject width="100%" height="100%">${html}</foreignObject></svg>`;
+  const img = new Image();
+  img.onload = () => {
+    const c = Object.assign(document.createElement("canvas"), { width: w * scale, height: h * scale });
+    const ctx = c.getContext("2d"); ctx.scale(scale, scale); ctx.drawImage(img, 0, 0);
+    c.toBlob((b) => { const a = document.createElement("a"); a.href = URL.createObjectURL(b); a.download = `fire-forecast-${fileName()}.png`; a.click(); });
+  };
+  img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+}
 function ringsPNG() {
-  const svg = $("#rings .ba-harm svg");    // the harmonized rings, not the raw layer underneath
+  const svg = $("#rings svg");
   const clone = svg.cloneNode(true);
   const css = getComputedStyle(document.documentElement);
   clone.querySelectorAll("[fill='var(--empty)']").forEach((n) => n.setAttribute("fill", css.getPropertyValue("--empty").trim()));
-  clone.querySelectorAll("text").forEach((tx) => { tx.setAttribute("fill", "#e9e4dc"); tx.setAttribute("font-family", "Inter, 'IBM Plex Sans Arabic', sans-serif"); tx.setAttribute("font-size", tx.classList.contains("ring-centre") ? "16" : "11"); });
+  clone.querySelectorAll("text").forEach((tx) => { tx.setAttribute("fill", "#1E2722"); tx.setAttribute("font-family", "'IBM Plex Sans Arabic', sans-serif"); tx.setAttribute("font-size", tx.classList.contains("ring-centre") ? "16" : "11"); });
   const vb = svg.viewBox.baseVal, scale = 3;
   const canvas = Object.assign(document.createElement("canvas"), { width: vb.width * scale, height: (vb.height + 40) * scale });
   const ctx = canvas.getContext("2d");
-  ctx.fillStyle = "#14110f"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "#FFFFFF"; ctx.fillRect(0, 0, canvas.width, canvas.height);
   const img = new Image();
   img.onload = () => {
     ctx.drawImage(img, 0, 0, vb.width * scale, vb.height * scale);
-    // caption: centred, and the font shrinks until the whole line fits the image width
     const caption = `${t("title")} · ${areaName(state.src)} · NASA FIRMS MODIS + VIIRS`;
-    ctx.fillStyle = "#e9e4dc";
-    ctx.direction = document.documentElement.dir;
-    ctx.textAlign = "center";
+    ctx.fillStyle = "#1E2722"; ctx.direction = document.documentElement.dir; ctx.textAlign = "center";
     let px = 13 * scale;
-    do { ctx.font = `${px}px 'IBM Plex Sans Arabic', Inter, sans-serif`; px -= scale; }
-    while (ctx.measureText(caption).width > canvas.width - 24 * scale && px > 6 * scale);
+    do { ctx.font = `${px}px 'IBM Plex Sans Arabic', sans-serif`; px -= scale; } while (ctx.measureText(caption).width > canvas.width - 24 * scale && px > 6 * scale);
     ctx.fillText(caption, canvas.width / 2, (vb.height + 24) * scale);
-    canvas.toBlob((b) => { const a = document.createElement("a"); a.href = URL.createObjectURL(b); a.download = `fire-rings-${fileName()}.png`; a.click(); });
+    canvas.toBlob((b) => { const a = document.createElement("a"); a.href = URL.createObjectURL(b); a.download = `fire-calendar-${fileName()}.png`; a.click(); });
   };
   img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(new XMLSerializer().serializeToString(clone));
 }
@@ -596,68 +486,66 @@ function fillPresets() {
   const sel = $("#preset"), cur = sel.value;
   sel.innerHTML = "";
   sel.add(new Option(t("choosePlace"), ""));
-  t("presets").forEach((name, i) => sel.add(new Option(name, i)));
+  const groups = [[t("groupSaudi"), REGIONS.slice(0, SAUDI)], [t("groupWorld"), REGIONS.slice(SAUDI)]];
+  for (const [label, list] of groups) {
+    const og = document.createElement("optgroup"); og.label = label;
+    list.forEach((r) => og.appendChild(new Option(t("regions")[r.id], r.id)));
+    sel.appendChild(og);
+  }
   sel.value = cur;
+  $("#quick").innerHTML = ["asir", "madinah", "kalimantan"].map((id) => `<button class="chip" data-region="${id}">${t("regions")[id]}</button>`).join("");
+  document.querySelectorAll("#quick [data-region]").forEach((b) => b.onclick = () => openRegion(b.dataset.region));
 }
-
-function fillQuick() {
-  // one-click examples in the empty report: home first, then the world
-  $("#quick").innerHTML = [0, 2, 3].map((i) => `<button class="btn ghost" data-quick="${i}">${t("presets")[i]}</button>`).join("");
-  document.querySelectorAll("[data-quick]").forEach((b) => b.onclick = () => {
-    const i = +b.dataset.quick; $("#preset").value = i; choose({ preset: i, b: PRESETS[i].b });
-  });
-}
+function fillGlassesWorld() { $("#glassesWorld").innerHTML = t("glasses").map((g) => `<li>${g}</li>`).join(""); }
 
 function applyLanguage() {
   applyStatic();
-  fillPresets();
-  fillQuick();
+  fillPresets(); fillGlassesWorld(); renderReady(); fillWhenLegend();
   if (!hero.growing) drawHero();
-  $("#whenLegend").innerHTML = t("monthsLong").map((_, m) =>
-    `<span><i style="background:${V.d3.interpolateSinebow((m + 0.5) / 12)}"></i>${t("months")[m]}</span>`).join("");
   $("#wave").textContent = t(mapState.timer ? "waveStop" : "waveBtn");
-  if (!state.area) $("#hint").textContent = t(mapState.mode === "when" ? "mapHintWhen" : "mapHint");
+  $("#hint").textContent = t(mapState.mode === "when" ? "mapHintWhen" : "mapHint");
   render();
   const open = document.querySelector("dialog[open]");
   if (open) openSheet(open.id);
 }
 
+function setTab(tab) {
+  state.tab = tab;
+  document.querySelectorAll("[data-tab]").forEach((b) => b.classList.toggle("on", b.dataset.tab === tab));
+  document.querySelectorAll("[data-panel]").forEach((p) => (p.hidden = p.dataset.panel !== tab));
+}
+
 async function start() {
   applyStatic();
   await D.loadMeta();
-  drawHero();          // chapter 1 first: it needs only the small meta file
-  heroStats();
+  REGIONS = await (await fetch("data/regions.json")).json();
+  fillPresets(); fillGlassesWorld(); renderReady(); drawHero();
+  $("#preset").onchange = (e) => { if (e.target.value) openRegion(e.target.value); };
   $("#grow").onclick = grow;
+  $("#lang").onclick = () => { setLang(lang() === "ar" ? "en" : "ar"); applyLanguage(); };
+  document.querySelectorAll("[data-tab]").forEach((b) => b.onclick = () => setTab(b.dataset.tab));
+  document.querySelectorAll("[data-cal]").forEach((b) => b.onclick = () => {
+    state.cal = b.dataset.cal; document.querySelectorAll("[data-cal]").forEach((x) => x.classList.toggle("on", x === b)); render();
+  });
+  document.addEventListener("click", (e) => { const tg = e.target.closest("[data-open]"); if (tg) openSheet(tg.dataset.open); });
+  $("#dlMonthly").onclick = () => download(`fire-calendar-${fileName()}-monthly.csv`, D.toCSV(state.area, areaName(state.src)));
+  $("#dlCells").onclick = () => { const [a, b] = monthRange(); download(`fire-calendar-${fileName()}-cells.csv`, D.cellsCSV(state.area, a, b)); };
+  $("#dlRings").onclick = ringsPNG;
+  new IntersectionObserver((es) => es.forEach((e) => e.isIntersecting && heroStats()), { threshold: 0.3 }).observe($("#trust"));
+
   const overview = await D.loadOverview();
   initMap(overview);
-  fillPresets();
-  fillQuick();
-  const sel = $("#preset");
-  sel.onchange = () => { if (sel.value !== "") { const i = +sel.value; choose({ preset: i, b: PRESETS[i].b }); } };
-
+  document.querySelectorAll("[data-map]").forEach((b) => b.onclick = () => { stopWave(); setMapMode(b.dataset.map); });
+  $("#wave").onclick = toggleWave;
   $("#go").onclick = () => {
     const lat = +$("#lat").value, lon = +$("#lon").value, km = +$("#rad").value || 50;
     if (!$("#lat").value || !$("#lon").value || Math.abs(lat) > 90 || Math.abs(lon) > 180) { $("#hint").textContent = t("badCoords"); return; }
     const dLat = km / 111, dLon = km / (111 * Math.max(0.1, Math.cos((lat * Math.PI) / 180)));
     choose({ point: { lat, lon, km }, b: { south: lat - dLat, north: lat + dLat, west: lon - dLon, east: lon + dLon } });
   };
-  $("#compare").onclick = () => {
-    if (!state.area) { $("#hint").textContent = t("compareFirst"); return; }
-    state.compareNext = true; $("#compare").classList.add("on"); $("#hint").textContent = t("compareNow");
-  };
-  $("#lang").onclick = () => { setLang(lang() === "ar" ? "en" : "ar"); applyLanguage(); };
-  document.querySelectorAll("[data-map]").forEach((b) => b.onclick = () => { stopWave(); setMapMode(b.dataset.map); });
-  $("#wave").onclick = toggleWave;
-  document.querySelectorAll("[data-cal]").forEach((b) => b.onclick = () => {
-    state.cal = b.dataset.cal; document.querySelectorAll("[data-cal]").forEach((x) => x.classList.toggle("on", x === b)); render();
-  });
-  document.addEventListener("click", (e) => { const tg = e.target.closest("[data-open]"); if (tg) openSheet(tg.dataset.open); });
-  $("#dlMonthly").onclick = () => download(`fire-rings-${fileName()}-monthly.csv`, D.toCSV(state.area, areaName(state.src)));
-  $("#dlCells").onclick = () => { const [a, b] = monthRange(); download(`fire-rings-${fileName()}-cells.csv`, D.cellsCSV(state.area, a, b)); };
-  $("#dlRings").onclick = ringsPNG;
-
-  const p = PRESETS.findIndex((x) => x.id === new URLSearchParams(location.search).get("area"));
-  if (p >= 0) { sel.value = p; choose({ preset: p, b: PRESETS[p].b }); }
+  const want = new URLSearchParams(location.search).get("area");
+  const alias = { "asir-saudi-arabia": "asir", "kalimantan-indonesia": "kalimantan" };
+  if (want) openRegion(alias[want] || want);
 }
 
 start().catch((e) => { console.error(e); $("#hint").textContent = t("loadFail"); });

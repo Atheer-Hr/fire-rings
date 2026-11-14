@@ -1,4 +1,4 @@
-﻿"""Stage 4: machine-learning outlook of fire activity for the next 1-3 months.
+"""Stage 4: machine-learning outlook of fire activity for the next 1-3 months.
 
 For every active 0.25 deg cell the model predicts, 1, 2 and 3 months ahead:
   * the expected number of harmonized hotspots (gradient boosting, Poisson loss)
@@ -272,7 +272,7 @@ def main():
         for lead in LEADS:
             e = d[d.lead == lead]
             res[f"lead_{lead}"] = {
-                "ml": evaluate("Fire Rings ML", e.pred.values, e.obs.values, e.prob.values),
+                "ml": evaluate("Fire Calendar ML", e.pred.values, e.obs.values, e.prob.values),
                 "climatology": evaluate("Average of earlier years", e.clim.values, e.obs.values,
                                         e.clim_freq.values),
                 "climatology_median": evaluate("Median of earlier years", e.clim_med.values, e.obs.values),
