@@ -56,14 +56,14 @@ https://atheer-hr.github.io/fire-rings
 5. **Reads it for people.** Choose an area on the map (draw a box, type coordinates, or pick a place), and Fire Rings shows:
    * **Fire Forecast.** A weather-app card with the expected hotspots next month, a five-flame risk level, a countdown to the fire season and a "prepare by" date.
    * **Is this normal?** The latest month compared with the median of the same month in earlier years, in one plain sentence ("13× the usual October, highest since 2015").
-   * **Fire Rings.** The burning activity calendar drawn as tree rings: one ring per year, one slice per month, plus a dashed outer ring for the outlook. A toggle shows the raw record as published next to the harmonized one.
+   * **Fire Rings.** The burning activity calendar drawn as tree rings: one ring per year, one slice per month, plus a dashed outer ring for the outlook. A before/after handle shows the raw record next to the harmonized one. Colours are relative to the area, so quiet regions show their own peaks.
    * **Calendar grid.** Colour-blind-safe colours, with a "compared with usual" mode.
    * **Season shift.** Season start, length and trend across 25 years.
    * **Repeat-burn hotspots.** Places that burn in the same month nearly every year, usually planned burning, so prevention teams know where to go.
    * **Human fingerprint.** Weekly rhythms in burning. Nature has no weekends.
    * **Downloads.** CSV of the harmonized monthly record and of hotspots by cell, plus a PNG of the rings.
 
-5. **Looks ahead with machine learning.** Gradient-boosted trees (Poisson loss for counts, 10/90% quantile models for a range, and a fire / no-fire classifier) forecast every active 25 km cell 1–3 months ahead. They use only information available on the day of the forecast. Tested blind on 2025, a year the model never saw:
+6. **Looks ahead with machine learning.** Gradient-boosted trees (Poisson loss for counts, 10/90% quantile models for a range, and a fire / no-fire classifier) forecast every active 25 km cell 1–3 months ahead. They use only information available on the day of the forecast. Tested blind on 2025, a year the model never saw:
    * The error is 41% lower than the best simple method (the average of earlier years) one month ahead, and 29% lower three months ahead.
    * The fire / no-fire classifier reaches AUC 0.92.
 
