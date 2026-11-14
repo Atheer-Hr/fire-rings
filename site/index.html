@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fire Rings</title>
+  <meta name="description" content="A harmonized MODIS + VIIRS burning activity calendar: is this fire season normal, and when should we get ready?">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='none' stroke='%23f98e09' stroke-width='3'/%3E%3Ccircle cx='16' cy='16' r='8' fill='none' stroke='%23bc3754' stroke-width='3'/%3E%3Ccircle cx='16' cy='16' r='3' fill='%23fcffa4'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,600&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="14" fill="none" stroke="#f98e09" stroke-width="3"/><circle cx="16" cy="16" r="8" fill="none" stroke="#bc3754" stroke-width="3"/><circle cx="16" cy="16" r="3" fill="#fcffa4"/></svg>
+    <div>
+      <h1 data-i18n="title">Fire Rings</h1>
+      <p data-i18n="tagline">From firefighting to fire-readiness</p>
+    </div>
+  </div>
+  <nav>
+    <button class="link" data-open="about" data-i18n="howItWorks">How it works</button>
+    <button class="link" data-open="model" data-i18n="modelCard">Model card</button>
+    <button class="btn ghost lang" id="lang" data-i18n="langSwitch">العربية</button>
+  </nav>
+</header>
+
+<main class="layout">
+  <section class="mapside">
+    <div class="controls">
+      <label class="field">
+        <span data-i18n="areaOfInterest">Area of interest</span>
+        <select id="preset"></select>
+      </label>
+      <div class="row">
+        <button id="draw" class="btn" data-i18n="drawBox">Draw a box on the map</button>
+        <button id="compare" class="btn ghost" data-i18n="compareWith" data-i18n-title="compareTitle">Compare with…</button>
+      </div>
+      <details class="coords">
+        <summary data-i18n="typeCoords">Or type coordinates</summary>
+        <div class="row">
+          <label class="field small"><span data-i18n="latitude">Latitude</span><input id="lat" type="number" step="0.01" placeholder="18.2"></label>
+          <label class="field small"><span data-i18n="longitude">Longitude</span><input id="lon" type="number" step="0.01" placeholder="42.5"></label>
+          <label class="field small"><span data-i18n="radius">Radius km</span><input id="rad" type="number" value="50" min="10" max="1000"></label>
+          <button id="go" class="btn" data-i18n="go">Go</button>
+        </div>
+      </details>
+    </div>
+    <div id="map"></div>
+    <p class="hint" id="hint" data-i18n="mapHint">Map shows total harmonized hotspots per 25 km cell.</p>
+  </section>
+
+  <section class="report" id="report" aria-live="polite">
+    <div class="empty" id="empty">
+      <h2 data-i18n="emptyTitle">Is this fire season normal?</h2>
+      <p data-i18n="emptyText"></p>
+    </div>
+
+    <div id="content" hidden>
+      <div class="area-head">
+        <h2 id="areaName"></h2>
+        <p class="muted" id="areaMeta"></p>
+      </div>
+
+      <article class="wx" id="forecastCard" aria-label="Fire Forecast"></article>
+
+      <article class="card verdict" id="verdict"></article>
+
+      <article class="card">
+        <div class="card-head">
+          <h3 data-i18n="ringsTitle">Fire Rings</h3>
+          <div class="seg" role="group">
+            <button class="on" data-rec="H" data-i18n="harmonized">Harmonized</button>
+            <button data-rec="naive" data-i18n="rawPublished">Raw, as published</button>
+          </div>
+        </div>
+        <p class="muted small" data-i18n="ringsHelp"></p>
+        <div class="rings-wrap" id="ringsWrap"><div id="rings" class="rings"></div><div id="rings2" class="rings" hidden></div></div>
+        <div id="ringLegend" class="legend"></div>
+        <p class="note" id="recNote"></p>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <h3 data-i18n="calTitle">Burning activity calendar</h3>
+          <div class="seg" role="group">
+            <button class="on" data-cal="count" data-i18n="calCount">Hotspots</button>
+            <button data-cal="anomaly" data-i18n="calAnom">Compared with usual</button>
+          </div>
+        </div>
+        <div id="calendar" class="calendar"></div>
+        <div id="calLegend" class="legend"></div>
+      </article>
+
+      <div class="two">
+        <article class="card">
+          <h3 data-i18n="outlookTitle">Next three months</h3>
+          <div id="outlook"></div>
+          <p class="small muted"><span class="key k-exp"></span> <span data-i18n="expected"></span> <span class="key k-range"></span> <span data-i18n="likelyRange"></span> <span class="key k-usual"></span> <span data-i18n="usual"></span></p>
+          <p class="note" id="outlookNote"></p>
+        </article>
+        <article class="card">
+          <h3 data-i18n="seasonTitle">Is the season moving?</h3>
+          <div id="season"></div>
+          <p class="note" id="seasonNote"></p>
+        </article>
+      </div>
+
+      <article class="card">
+        <div class="card-head"><h3 data-i18n="recordTitle">The record, repaired</h3></div>
+        <div id="record"></div>
+        <div class="keys small">
+          <span><i class="sw l-naive"></i><span data-i18n="kNaive"></span></span>
+          <span><i class="sw l-modis"></i><span data-i18n="kModis"></span></span>
+          <span><i class="sw l-viirs"></i><span data-i18n="kViirs"></span></span>
+          <span><i class="sw l-harm"></i><span data-i18n="kHarm"></span></span>
+        </div>
+        <p class="note" id="recordNote"></p>
+      </article>
+
+      <div class="two">
+        <article class="card">
+          <h3 data-i18n="recurTitle">Where it burns again and again</h3>
+          <p class="note" id="recurNote"></p>
+        </article>
+        <article class="card">
+          <h3 data-i18n="humanTitle">Human fingerprint</h3>
+          <div id="weekday"></div>
+          <p class="note" id="weekNote"></p>
+        </article>
+      </div>
+
+      <article class="card downloads">
+        <h3 data-i18n="download">Download</h3>
+        <div class="row wrap">
+          <label class="field small"><span data-i18n="from">From</span><select id="from"></select></label>
+          <label class="field small"><span data-i18n="to">To</span><select id="to"></select></label>
+          <button class="btn" id="dlMonthly" data-i18n="dlMonthly">Monthly record (CSV)</button>
+          <button class="btn" id="dlCells" data-i18n="dlCells">Hotspots by cell (CSV)</button>
+          <button class="btn ghost" id="dlRings" data-i18n="dlRings">Fire Rings (PNG)</button>
+        </div>
+        <p class="small muted" data-i18n="dataNote"></p>
+      </article>
+    </div>
+  </section>
+</main>
+
+<dialog id="about" class="sheet"></dialog>
+<dialog id="model" class="sheet"></dialog>
+<div id="tooltip" role="tooltip"></div>
+
+<footer class="foot">
+  <p dir="ltr">We acknowledge the use of data and/or imagery from NASA's Fire Information for Resource Management System (FIRMS) (<a href="https://earthdata.nasa.gov/firms">earthdata.nasa.gov/firms</a>), part of NASA's Land, Atmosphere Near real-time Capability for Earth observations (LANCE) (<a href="https://earthdata.nasa.gov/lance">earthdata.nasa.gov/lance</a>) and NASA's Earth Science Data and Information System (ESDIS).</p>
+  <p data-i18n="footBuilt"></p>
+</footer>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

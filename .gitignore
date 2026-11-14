@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+.venv/
+*.parquet
+*.zip
+data/oni.ascii.txt
