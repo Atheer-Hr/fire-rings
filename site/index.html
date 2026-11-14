@@ -31,15 +31,26 @@
 
 <main id="top">
   <!-- 1 · one question -->
-  <section class="hero wrap" id="area">
-    <p class="kicker" data-i18n="heroKicker"></p>
-    <h1 data-i18n="heroTitle">Is the fire season in your area normal?</h1>
-    <p class="lead" data-i18n="heroLead"></p>
-    <div class="ask">
-      <select id="preset" aria-label="Area"></select>
+  <section class="hero" id="area">
+    <div class="hero-bg" aria-hidden="true"></div>
+    <div class="wrap hero-in">
+      <span class="pill-kicker"><i class="live"></i><span data-i18n="heroKicker"></span></span>
+      <h1><span data-i18n="heroTitleA">Is the fire season in your area</span> <span class="grad" data-i18n="heroTitleB">normal?</span></h1>
+      <p class="lead" data-i18n="heroLead"></p>
+      <div class="ask">
+        <svg class="ask-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12zm0-9.5a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5z" fill="currentColor"/></svg>
+        <select id="preset" aria-label="Area"></select>
+      </div>
+      <div class="quick"><span class="small" data-i18n="pickHint"></span><span id="quick"></span></div>
+      <ol class="steps3" id="steps3"></ol>
     </div>
-    <div class="quick"><span class="muted small" data-i18n="pickHint"></span><span id="quick"></span></div>
-    <a class="linklike small" href="#world" data-i18n="orMap"></a>
+  </section>
+
+  <section class="stats wrap reveal" aria-label="Key numbers">
+    <div class="statbox"><b data-count="25">0</b><span data-i18n="st1"></span></div>
+    <div class="statbox"><b data-count="565" data-suffix="M">0</b><span data-i18n="st2"></span></div>
+    <div class="statbox"><b data-count="188762">0</b><span data-i18n="st3"></span></div>
+    <div class="statbox"><b><s class="bad">718%</s> <i class="arr">→</i> <span data-count="2.2" data-suffix="%" data-dec="1">0</span></b><span data-i18n="st4"></span></div>
   </section>
 
   <!-- 2 · the answer -->
@@ -145,18 +156,19 @@
   </section>
 
   <!-- 3 · readiness list -->
-  <section class="zone" id="ready">
+  <section class="zone reveal" id="ready">
     <div class="wrap">
       <p class="kicker" data-i18n="readyKicker"></p>
       <h2 data-i18n="readyTitle"></h2>
       <p class="lead" data-i18n="readyLead"></p>
+      <div class="top3" id="top3"></div>
       <div class="ready" id="readyList"></div>
       <p class="small muted" data-i18n="readyNote"></p>
     </div>
   </section>
 
   <!-- 4 · world map -->
-  <section class="wrap section" id="world">
+  <section class="wrap section reveal" id="world">
     <p class="kicker" data-i18n="worldKicker"></p>
     <h2 data-i18n="worldTitle"></h2>
     <p class="lead" data-i18n="worldLead"></p>
@@ -186,7 +198,7 @@
   </section>
 
   <!-- 5 · why trust it -->
-  <section class="zone" id="trust">
+  <section class="zone reveal" id="trust">
     <div class="wrap trust">
       <div>
         <p class="kicker" data-i18n="trustKicker"></p>
@@ -213,7 +225,21 @@
 <div id="tooltip" role="tooltip"></div>
 
 <footer class="foot">
-  <div class="wrap">
+  <div class="wrap foot-grid">
+    <div>
+      <div class="brand"><span class="brand-mark"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5c.8 3.4 5.4 5.5 5.4 10.9A5.4 5.4 0 0 1 6.6 13.4c0-2.8 1.5-4.4 2.5-6 .2 1.8 1 2.9 2 3.2-.3-2.9.1-5.4.9-8.1z" fill="currentColor"/></svg></span>
+        <span class="brand-text"><b data-i18n="title"></b><small data-i18n="tagline"></small></span></div>
+      <p class="foot-about" data-i18n="footAbout"></p>
+    </div>
+    <div><h4 data-i18n="footData"></h4><ul><li>NASA FIRMS</li><li>MODIS C6.1 · Terra &amp; Aqua</li><li>VIIRS 375 m · Suomi NPP &amp; NOAA-20</li></ul></div>
+    <div><h4 data-i18n="footTeam"></h4><ul id="teamList"></ul></div>
+    <div><h4 data-i18n="footLinks"></h4><ul>
+      <li><button class="linklike" data-open="about" data-i18n="howItWorks"></button></li>
+      <li><button class="linklike" data-open="model" data-i18n="modelCard"></button></li>
+      <li><a class="linklike" href="https://github.com/Atheer-Hr/fire-rings">GitHub</a></li>
+    </ul></div>
+  </div>
+  <div class="wrap foot-legal">
     <p dir="ltr">We acknowledge the use of data and/or imagery from NASA's Fire Information for Resource Management System (FIRMS) (<a href="https://earthdata.nasa.gov/firms">earthdata.nasa.gov/firms</a>), part of NASA's Land, Atmosphere Near real-time Capability for Earth observations (LANCE) (<a href="https://earthdata.nasa.gov/lance">earthdata.nasa.gov/lance</a>) and NASA's Earth Science Data and Information System (ESDIS).</p>
     <p data-i18n="footBuilt"></p>
   </div>

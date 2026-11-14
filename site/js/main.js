@@ -51,8 +51,8 @@ function nextMonths(H, outlook) {
   const last = D.ym(D.meta().months - 1), st = monthStats(H);
   return outlook.map((m, k) => {
     const mo = (last.month + 1 + k) % 12;
-    // a handful of fires is never "high", whatever the area's history (4 fires vs a usual 1 is not a crisis)
-    const lvl = m < 5 ? Math.min(levelOf(m, st.all), 1) : levelOf(m, st.all);
+    // a handful of fires (under 10) is never "high", whatever the area's history
+    const lvl = m < 10 ? Math.min(levelOf(m, st.all), 1) : levelOf(m, st.all);
     return { m: mo, year: last.year + Math.floor((last.month + 1 + k) / 12), exp: m, usual: st.median[mo], lvl };
   });
 }
@@ -374,8 +374,18 @@ function renderReady() {
           <span><button class="btn btn-outline btn-sm" data-region="${r.id}">${t("readyOpen")}</button></span>
         </div>`).join("")}
     </div>`;
-  $("#readyList").innerHTML = `<p class="small muted">${L[(last.month + 1) % 12]} ${last.year + (last.month === 11 ? 1 : 0)}</p>`
-    + table(t("groupSaudi"), rows.slice(0, SAUDI)) + table(t("groupWorld"), rows.slice(SAUDI));
+  const when = `${L[(last.month + 1) % 12]} ${last.year + (last.month === 11 ? 1 : 0)}`;
+  // the three areas that need attention first, as large cards
+  const top = order([...rows]).slice(0, 3);
+  $("#top3").innerHTML = `<h3>${t("top3Title")} · <span class="muted">${when}</span></h3><div class="top3-grid">${top.map((r, k) => `
+    <article class="top-card lvl${r.nm.lvl}">
+      <div class="top-head"><b class="rank">${k + 1}</b><span class="badge b-lvl">${t("levels")[r.nm.lvl]}</span></div>
+      <h4>${t("regions")[r.id]}</h4>
+      <p class="top-num"><b>${fmt(r.nm.exp)}</b> <span>${t("expectedWord")}</span></p>
+      <p class="muted small">${t("usualWord")}: ${fmt(r.nm.usual)} · ${r.season}</p>
+      <button class="btn btn-primary btn-sm" data-region="${r.id}">${t("readyOpen")}</button>
+    </article>`).join("")}</div>`;
+  $("#readyList").innerHTML = table(t("groupSaudi"), rows.slice(0, SAUDI)) + table(t("groupWorld"), rows.slice(SAUDI));
   document.querySelectorAll("[data-region]").forEach((b) => b.onclick = () => openRegion(b.dataset.region));
 }
 
@@ -500,9 +510,46 @@ function fillPresets() {
 }
 function fillGlassesWorld() { $("#glassesWorld").innerHTML = t("glasses").map((g) => `<li>${g}</li>`).join(""); }
 
+// hero steps and footer team, both translated
+const STEP_ICONS = [
+  "M12 22s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12zm0-9.5a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5z",
+  "M4 19h16M6 16V9m4 7V5m4 11v-5m4 5V8",
+  "M12 3l7 3v5c0 4.5-3 8.2-7 10-4-1.8-7-5.5-7-10V6l7-3zm-3 9 2 2 4-4",
+];
+function fillExtras() {
+  $("#steps3").innerHTML = t("steps3").map(([h, d], i) => `<li><span class="st-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${STEP_ICONS[i]}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span><b>${h}</b><small>${d}</small></span></li>`).join("");
+  $("#teamList").innerHTML = t("team").map((m) => `<li>${m}</li>`).join("");
+}
+
+// numbers count up the first time the strip comes into view
+function countStats() {
+  document.querySelectorAll("[data-count]").forEach((el) => {
+    const to = +el.dataset.count, dec = +(el.dataset.dec || 0), suf = el.dataset.suffix || "";
+    countUp(el, to, (x) => (dec ? x.toFixed(dec) : Math.round(x).toLocaleString("en-US")) + suf, 1600);
+  });
+}
+
+// fade sections in as they arrive, and mark the nav link of the section in view
+function motion() {
+  const io = new IntersectionObserver((es) => es.forEach((e) => {
+    if (!e.isIntersecting) return;
+    e.target.classList.add("in");
+    if (e.target.classList.contains("stats") && !e.target.dataset.done) { e.target.dataset.done = 1; countStats(); }
+    io.unobserve(e.target);
+  }), { threshold: 0.15 });
+  document.querySelectorAll(".reveal").forEach((el) => io.observe(el));
+  const links = [...document.querySelectorAll(".nav a")];
+  const spy = new IntersectionObserver((es) => es.forEach((e) => {
+    if (e.isIntersecting) links.forEach((a) => a.classList.toggle("active", a.getAttribute("href") === `#${e.target.id}`));
+  }), { rootMargin: "-45% 0px -50% 0px" });
+  ["area", "ready", "world", "trust"].forEach((id) => spy.observe(document.getElementById(id)));
+  const bar = $(".topbar");
+  addEventListener("scroll", () => bar.classList.toggle("scrolled", scrollY > 40), { passive: true });
+}
+
 function applyLanguage() {
   applyStatic();
-  fillPresets(); fillGlassesWorld(); renderReady(); fillWhenLegend();
+  fillPresets(); fillGlassesWorld(); fillExtras(); renderReady(); fillWhenLegend();
   if (!hero.growing) drawHero();
   $("#wave").textContent = t(mapState.timer ? "waveStop" : "waveBtn");
   $("#hint").textContent = t(mapState.mode === "when" ? "mapHintWhen" : "mapHint");
@@ -521,7 +568,7 @@ async function start() {
   applyStatic();
   await D.loadMeta();
   REGIONS = await (await fetch("data/regions.json")).json();
-  fillPresets(); fillGlassesWorld(); renderReady(); drawHero();
+  fillPresets(); fillGlassesWorld(); fillExtras(); renderReady(); drawHero(); motion();
   $("#preset").onchange = (e) => { if (e.target.value) openRegion(e.target.value); };
   $("#grow").onclick = grow;
   $("#lang").onclick = () => { setLang(lang() === "ar" ? "en" : "ar"); applyLanguage(); };
