@@ -84,13 +84,21 @@ def main():
                 "peak": cal.argmax(1).tolist()}
     (C.SITE_DATA / "overview.json").write_text(json.dumps(overview, separators=(",", ":")))
 
+    # whole-Earth record for the opening story
+    world = {col: r(mats[col].sum(0)).astype(int).tolist() for col in ("H", "M", "V", "naive")}
+    backcast = (src.values < 2)
+    world["unc"] = r((mats["H"] * w[:, None]).sum(0) * backcast).astype(int).tolist()
+    if outlook is not None:
+        world["outlook"] = [{"m": float(outlook[f"m{L}"].sum()), "lo": float(outlook[f"lo{L}"].sum()),
+                             "hi": float(outlook[f"hi{L}"].sum())} for L in (1, 2, 3)]
+
     y0, m0 = C.month_of(0)
     y1, m1 = C.month_of(n_months - 1)
     meta = {
         "start": [y0, m0], "end": [y1, m1], "months": n_months,
         "cell_deg": C.CELL, "tile_deg": C.TILE_DEG, "ncols": C.NCOLS,
         "tiles": tile_list, "source_by_month": src.astype(int).tolist(),
-        "harmonize": hrep, "forecast": frep,
+        "harmonize": hrep, "forecast": frep, "world": world,
     }
     (C.SITE_DATA / "meta.json").write_text(json.dumps(meta, indent=1))
     size = sum(f.stat().st_size for f in C.SITE_DATA.rglob("*.json")) / 1e6

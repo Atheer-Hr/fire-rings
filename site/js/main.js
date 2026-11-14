@@ -39,36 +39,92 @@ function initMap(overview) {
   L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}", {
     maxZoom: 10, pane: "shadowPane",
   }).addTo(map);
-  const densityColor = V.colorScale(D.quantile(overview.total, 0.995));
-  // world fire density on a canvas: tens of thousands of cells are too many for SVG markers
+  const top = D.quantile(overview.total, 0.995);
+  const densityColor = V.colorScale(top);
+  // "When" mode: hue = calendar month of the peak (a colour wheel), brightness = how much burns
+  const whenColor = (m) => V.d3.interpolateSinebow((m + 0.5) / 12);
+  const weight = (v) => Math.min(1, Math.log(Math.max(v, 1)) / Math.log(Math.max(top, 2)));
+  // world fire map on a canvas: ~190,000 cells are too many for SVG markers
   const Density = L.Layer.extend({
     onAdd(m) {
       this._c = L.DomUtil.create("canvas", "density");
       m.getPanes().overlayPane.appendChild(this._c);
-      m.on("moveend zoomend resize", this._draw, this);
-      this._draw();
+      m.on("moveend zoomend resize", this._project, this);
+      this._project();
     },
-    onRemove(m) { this._c.remove(); m.off("moveend zoomend resize", this._draw, this); },
-    _draw() {
-      const size = map.getSize(), c = this._c;
-      L.DomUtil.setPosition(c, map.containerPointToLayerPoint([0, 0]));
-      c.width = size.x * devicePixelRatio; c.height = size.y * devicePixelRatio;
-      c.style.width = `${size.x}px`; c.style.height = `${size.y}px`;
-      const ctx = c.getContext("2d");
-      ctx.scale(devicePixelRatio, devicePixelRatio);
-      const deg = D.meta().cell_deg;
+    onRemove(m) { this._c.remove(); m.off("moveend zoomend resize", this._project, this); },
+    // screen rectangles are recomputed only when the view changes
+    _project() {
+      const size = map.getSize(), deg = D.meta().cell_deg;
+      L.DomUtil.setPosition(this._c, map.containerPointToLayerPoint([0, 0]));
+      this._c.width = size.x * devicePixelRatio; this._c.height = size.y * devicePixelRatio;
+      this._c.style.width = `${size.x}px`; this._c.style.height = `${size.y}px`;
+      this._rects = [];
       overview.cells.forEach((cell, i) => {
         const p = D.cellCenter(cell);
         const a = map.latLngToContainerPoint([p.lat + deg / 2, p.lon - deg / 2]);
         const b = map.latLngToContainerPoint([p.lat - deg / 2, p.lon + deg / 2]);
         if (b.x < 0 || a.x > size.x || b.y < 0 || a.y > size.y) return;
-        ctx.fillStyle = densityColor(overview.total[i]);
-        ctx.fillRect(a.x, a.y, Math.max(1, b.x - a.x), Math.max(1, b.y - a.y));
+        this._rects.push([a.x, a.y, Math.max(1, b.x - a.x), Math.max(1, b.y - a.y), i]);
       });
+      this.paint();
+    },
+    paint() {
+      const ctx = this._c.getContext("2d");
+      ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+      ctx.clearRect(0, 0, this._c.width, this._c.height);
+      const wave = mapState.waveMonth;
+      for (const [x, y, w, h, i] of this._rects) {
+        if (mapState.mode === "amount") { ctx.globalAlpha = 1; ctx.fillStyle = densityColor(overview.total[i]); }
+        else {
+          const pk = overview.peak[i];
+          ctx.fillStyle = whenColor(pk);
+          const base = 0.25 + 0.75 * weight(overview.total[i]);
+          ctx.globalAlpha = wave == null ? base : pk === wave ? 1 : 0.07;
+        }
+        ctx.fillRect(x, y, w, h);
+      }
+      ctx.globalAlpha = 1;
     },
   });
-  new Density().addTo(map);
+  density = new Density().addTo(map);
+  // legend for "When": a strip of the twelve month colours
+  $("#whenLegend").innerHTML = t("monthsLong").map((name, m) =>
+    `<span><i style="background:${whenColor(m)}"></i>${t("months")[m]}</span>`).join("");
   enableDrawing();
+}
+
+// ---------------------------------------------------------------- map modes and the fire wave
+const mapState = { mode: "amount", waveMonth: null, timer: null };
+let density;
+function setMapMode(mode) {
+  mapState.mode = mode;
+  document.querySelectorAll("[data-map]").forEach((b) => b.classList.toggle("on", b.dataset.map === mode));
+  $("#whenLegend").hidden = mode !== "when";
+  $("#hint").textContent = t(mode === "when" ? "mapHintWhen" : "mapHint");
+  density?.paint();
+}
+function toggleWave() {
+  if (mapState.timer) { stopWave(); return; }
+  setMapMode("when");
+  map.setView([12, 20], 2);
+  $("#wave").textContent = t("waveStop");
+  $("#mapMonth").hidden = false;
+  let m = 0;
+  const step = () => {
+    mapState.waveMonth = m;
+    $("#mapMonth").textContent = t("monthsLong")[m];
+    density.paint();
+    m = (m + 1) % 12;
+  };
+  step();
+  mapState.timer = setInterval(step, 900);
+}
+function stopWave() {
+  clearInterval(mapState.timer); mapState.timer = null; mapState.waveMonth = null;
+  $("#wave").textContent = t("waveBtn");
+  $("#mapMonth").hidden = true;
+  density?.paint();
 }
 
 function enableDrawing() {
@@ -197,6 +253,66 @@ async function saveCard() {
   img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
 }
 
+// ---------------------------------------------------------------- chapter 1: the story
+// Moments in the satellite record, shown while the tree grows.
+const EVENTS = { 2000: "ev2000", 2002: "ev2002", 2012: "ev2012", 2018: "ev2018", 2026: "ev2026" };
+const hero = { slider: null, growing: false };
+
+function world() {
+  const w = D.meta().world;
+  return { H: w.H, naive: w.naive, M: w.M, V: w.V, unc: w.unc, outlook: w.outlook || null };
+}
+
+function drawHero(upto) {
+  const w = world();
+  hero.slider = V.beforeAfter("#heroBA", {
+    raw: w.naive, harm: w.H, ref: w.H, outlook: w.outlook, title: t("earth"),
+    highlight: D.meta().months - 1, upto, size: 460,
+  });
+}
+
+function countUp(el, to, fmtFn, ms = 1400) {
+  const t0 = performance.now();
+  const tick = (now) => {
+    const k = Math.min(1, (now - t0) / ms), e = 1 - (1 - k) ** 3;
+    el.textContent = fmtFn(to * e);
+    if (k < 1) requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
+
+function heroStats() {
+  const v = D.meta().harmonize?.validation?.tile_month;
+  if (!v) return;
+  countUp($("#statRaw"), v.baseline_raw_viirs_as_modis.bias_pct, (x) => `+${Math.round(x)}%`);
+  countUp($("#statFix"), Math.abs(v.bridge_viirs_to_modis.bias_pct), (x) => `${x.toFixed(1)}%`, 1800);
+}
+
+async function grow() {
+  if (hero.growing) return;
+  hero.growing = true;
+  $("#grow").disabled = true;
+  const years = D.grid(D.meta().world.H).years;
+  const cap = $("#growCaption");
+  hero.slider?.set(100);                 // start fully "raw": the record as published
+  for (let k = 1; k <= years.length; k++) {
+    drawHero(k);
+    hero.slider.set(100);
+    const ev = EVENTS[years[k - 1]];
+    if (ev) { cap.innerHTML = `<b>${years[k - 1]}</b> · ${t(ev)}`; cap.classList.add("flash"); }
+    await new Promise((r) => setTimeout(r, ev ? 1700 : 260));
+    cap.classList.remove("flash");
+  }
+  // now repair the record in front of the reader
+  cap.innerHTML = t("evRepair");
+  for (let p = 100; p >= 0; p -= 2) { hero.slider.set(p); await new Promise((r) => setTimeout(r, 30)); }
+  await new Promise((r) => setTimeout(r, 900));
+  for (let p = 0; p <= 50; p += 2) { hero.slider.set(p); await new Promise((r) => setTimeout(r, 25)); }
+  cap.innerHTML = t("evDone");
+  hero.growing = false;
+  $("#grow").disabled = false;
+}
+
 // ---------------------------------------------------------------- report
 function render() {
   const a = state.area;
@@ -208,19 +324,23 @@ function render() {
   $("#areaName").textContent = name + (state.area2 ? `  ·  ${name2}` : "");
   $("#areaMeta").textContent = t("areaMeta", { cells: a.cells.length, total: fmt(total), from: D.label(0), to: D.label(last) });
 
-  const series = state.rec === "H" ? a.H : a.naive;
+  const series = a.H;
   const sea = D.seasons(Array.from(a.H));
   renderForecast(a, sea);
   renderVerdict(a, sea, total);
 
-  V.rings("#rings", Array.from(series), { outlook: state.rec === "H" ? a.outlook : null, title: shortName(name), highlight: last, ref: a.H });
+  // rings with the before / after handle; a second area (compare) is shown repaired only
+  V.beforeAfter("#rings", { raw: Array.from(a.naive), harm: Array.from(a.H), ref: a.H, outlook: a.outlook,
+    title: shortName(name), highlight: last });
   const two = !!state.area2;
   $("#rings2").hidden = !two;
   $("#ringsWrap").classList.toggle("pair", two);
-  if (two) V.rings("#rings2", Array.from(state.rec === "H" ? state.area2.H : state.area2.naive),
-    { outlook: state.rec === "H" ? state.area2.outlook : null, title: shortName(name2), highlight: last, ref: state.area2.H });
+  if (two) V.rings("#rings2", Array.from(state.area2.H),
+    { outlook: state.area2.outlook, title: shortName(name2), highlight: last, ref: state.area2.H });
   V.legend("#ringLegend", V.rankScale(a.H).ticks, "count");
-  $("#recNote").innerHTML = `${state.rec === "H" ? t("ringsNoteH") : t("ringsNoteRaw")} ${t("ringsColour")}`;
+  const hi = sea.clim.indexOf(Math.max(...sea.clim)), lo = sea.clim.indexOf(Math.min(...sea.clim));
+  $("#ringsMeans").innerHTML = total < 30 ? t("ringsMeansFew")
+    : t("ringsMeans", { area: shortName(name), hi: t("monthsLong")[hi], lo: t("monthsLong")[lo] });
 
   const cal = V.calendar("#calendar", Array.from(series), { mode: state.cal, highlight: last, ref: a.H });
   V.legend("#calLegend", cal.ticks, state.cal);
@@ -445,7 +565,7 @@ function monthRange() {
 }
 
 function ringsPNG() {
-  const svg = $("#rings svg");
+  const svg = $("#rings .ba-harm svg");    // the harmonized rings, not the raw layer underneath
   const clone = svg.cloneNode(true);
   const css = getComputedStyle(document.documentElement);
   clone.querySelectorAll("[fill='var(--empty)']").forEach((n) => n.setAttribute("fill", css.getPropertyValue("--empty").trim()));
@@ -480,10 +600,23 @@ function fillPresets() {
   sel.value = cur;
 }
 
+function fillQuick() {
+  // one-click examples in the empty report: home first, then the world
+  $("#quick").innerHTML = [0, 2, 3].map((i) => `<button class="btn ghost" data-quick="${i}">${t("presets")[i]}</button>`).join("");
+  document.querySelectorAll("[data-quick]").forEach((b) => b.onclick = () => {
+    const i = +b.dataset.quick; $("#preset").value = i; choose({ preset: i, b: PRESETS[i].b });
+  });
+}
+
 function applyLanguage() {
   applyStatic();
   fillPresets();
-  if (!state.area) $("#hint").textContent = t("mapHint");
+  fillQuick();
+  if (!hero.growing) drawHero();
+  $("#whenLegend").innerHTML = t("monthsLong").map((_, m) =>
+    `<span><i style="background:${V.d3.interpolateSinebow((m + 0.5) / 12)}"></i>${t("months")[m]}</span>`).join("");
+  $("#wave").textContent = t(mapState.timer ? "waveStop" : "waveBtn");
+  if (!state.area) $("#hint").textContent = t(mapState.mode === "when" ? "mapHintWhen" : "mapHint");
   render();
   const open = document.querySelector("dialog[open]");
   if (open) openSheet(open.id);
@@ -492,9 +625,13 @@ function applyLanguage() {
 async function start() {
   applyStatic();
   await D.loadMeta();
+  drawHero();          // chapter 1 first: it needs only the small meta file
+  heroStats();
+  $("#grow").onclick = grow;
   const overview = await D.loadOverview();
   initMap(overview);
   fillPresets();
+  fillQuick();
   const sel = $("#preset");
   sel.onchange = () => { if (sel.value !== "") { const i = +sel.value; choose({ preset: i, b: PRESETS[i].b }); } };
 
@@ -509,9 +646,8 @@ async function start() {
     state.compareNext = true; $("#compare").classList.add("on"); $("#hint").textContent = t("compareNow");
   };
   $("#lang").onclick = () => { setLang(lang() === "ar" ? "en" : "ar"); applyLanguage(); };
-  document.querySelectorAll("[data-rec]").forEach((b) => b.onclick = () => {
-    state.rec = b.dataset.rec; document.querySelectorAll("[data-rec]").forEach((x) => x.classList.toggle("on", x === b)); render();
-  });
+  document.querySelectorAll("[data-map]").forEach((b) => b.onclick = () => { stopWave(); setMapMode(b.dataset.map); });
+  $("#wave").onclick = toggleWave;
   document.querySelectorAll("[data-cal]").forEach((b) => b.onclick = () => {
     state.cal = b.dataset.cal; document.querySelectorAll("[data-cal]").forEach((x) => x.classList.toggle("on", x === b)); render();
   });

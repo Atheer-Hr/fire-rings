@@ -4,11 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Fire Rings</title>
-  <meta name="description" content="A harmonized MODIS + VIIRS burning activity calendar: is this fire season normal, and when should we get ready?">
+  <meta name="description" content="25 years of NASA satellite fire records, repaired into one honest burning calendar: is this fire season normal, and when should we get ready?">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='none' stroke='%23f98e09' stroke-width='3'/%3E%3Ccircle cx='16' cy='16' r='8' fill='none' stroke='%23bc3754' stroke-width='3'/%3E%3Ccircle cx='16' cy='16' r='3' fill='%23fcffa4'/%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,600&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Fraunces:opsz,wght@9..144,600&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <link rel="stylesheet" href="css/app.css">
 </head>
@@ -28,9 +28,49 @@
   </nav>
 </header>
 
+<!-- Chapter 1: the problem, and the fix -->
+<section class="hero" id="story">
+  <div class="hero-text">
+    <p class="kicker" data-i18n="ch1Kicker">Chapter 1 · The problem</p>
+    <h2 data-i18n="ch1Title">Trees record their age in rings. The Earth records its fires.</h2>
+    <p class="lead" data-i18n="ch1Lead"></p>
+    <div class="bignum" aria-live="polite">
+      <div class="stat bad"><span class="num" id="statRaw">+0%</span><span data-i18n="statRawLabel"></span></div>
+      <div class="arrow" aria-hidden="true">→</div>
+      <div class="stat good"><span class="num" id="statFix">0%</span><span data-i18n="statFixLabel"></span></div>
+    </div>
+    <div class="row wrap">
+      <button id="grow" class="btn" data-i18n="growBtn">▶ Watch the record grow</button>
+      <a class="btn ghost" href="#explore" data-i18n="toMap">Find your area ↓</a>
+    </div>
+    <p class="caption" id="growCaption" aria-live="polite"></p>
+  </div>
+  <figure class="hero-rings">
+    <div id="heroBA"></div>
+    <figcaption>
+      <b data-i18n="dragTitle">↔ Drag across the rings</b>
+      <span data-i18n="dragHint"></span>
+    </figcaption>
+  </figure>
+</section>
+
+<!-- Chapters 2 and 3: the map and your area -->
+<section class="chapter-head" id="explore">
+  <p class="kicker" data-i18n="ch2Kicker">Chapter 2 · When does Earth burn?</p>
+  <h2 data-i18n="ch2Title">Every place has its own fire calendar</h2>
+  <p class="muted" data-i18n="ch2Lead"></p>
+</section>
+
 <main class="layout">
   <section class="mapside">
     <div class="controls">
+      <div class="row between">
+        <div class="seg" role="group">
+          <button class="on" data-map="amount" data-i18n="mapAmount">How much</button>
+          <button data-map="when" data-i18n="mapWhen">When</button>
+        </div>
+        <button id="wave" class="btn ghost" data-i18n="waveBtn">▶ Fire wave</button>
+      </div>
       <label class="field">
         <span data-i18n="areaOfInterest">Area of interest</span>
         <select id="preset"></select>
@@ -49,14 +89,20 @@
         </div>
       </details>
     </div>
-    <div id="map"></div>
+    <div class="mapwrap">
+      <div id="map"></div>
+      <div class="map-month" id="mapMonth" hidden></div>
+      <div class="when-legend" id="whenLegend" hidden></div>
+    </div>
     <p class="hint" id="hint" data-i18n="mapHint">Map shows total harmonized hotspots per 25 km cell.</p>
   </section>
 
   <section class="report" id="report" aria-live="polite">
+    <p class="kicker" data-i18n="ch3Kicker">Chapter 3 · Your area</p>
     <div class="empty" id="empty">
       <h2 data-i18n="emptyTitle">Is this fire season normal?</h2>
       <p data-i18n="emptyText"></p>
+      <div class="quick" id="quick"></div>
     </div>
 
     <div id="content" hidden>
@@ -70,29 +116,11 @@
       <article class="card verdict" id="verdict"></article>
 
       <article class="card">
-        <div class="card-head">
-          <h3 data-i18n="ringsTitle">Fire Rings</h3>
-          <div class="seg" role="group">
-            <button class="on" data-rec="H" data-i18n="harmonized">Harmonized</button>
-            <button data-rec="naive" data-i18n="rawPublished">Raw, as published</button>
-          </div>
-        </div>
+        <h3 data-i18n="ringsTitle">Fire Rings</h3>
         <p class="muted small" data-i18n="ringsHelp"></p>
-        <div class="rings-wrap" id="ringsWrap"><div id="rings" class="rings"></div><div id="rings2" class="rings" hidden></div></div>
+        <div class="rings-wrap" id="ringsWrap"><div id="rings"></div><div id="rings2" class="rings" hidden></div></div>
         <div id="ringLegend" class="legend"></div>
-        <p class="note" id="recNote"></p>
-      </article>
-
-      <article class="card">
-        <div class="card-head">
-          <h3 data-i18n="calTitle">Burning activity calendar</h3>
-          <div class="seg" role="group">
-            <button class="on" data-cal="count" data-i18n="calCount">Hotspots</button>
-            <button data-cal="anomaly" data-i18n="calAnom">Compared with usual</button>
-          </div>
-        </div>
-        <div id="calendar" class="calendar"></div>
-        <div id="calLegend" class="legend"></div>
+        <p class="means" id="ringsMeans"></p>
       </article>
 
       <div class="two">
@@ -105,12 +133,12 @@
         <article class="card">
           <h3 data-i18n="seasonTitle">Is the season moving?</h3>
           <div id="season"></div>
-          <p class="note" id="seasonNote"></p>
+          <p class="means" id="seasonNote"></p>
         </article>
       </div>
 
       <article class="card">
-        <div class="card-head"><h3 data-i18n="recordTitle">The record, repaired</h3></div>
+        <h3 data-i18n="recordTitle">The record, repaired</h3>
         <div id="record"></div>
         <div class="keys small">
           <span><i class="sw l-naive"></i><span data-i18n="kNaive"></span></span>
@@ -118,32 +146,48 @@
           <span><i class="sw l-viirs"></i><span data-i18n="kViirs"></span></span>
           <span><i class="sw l-harm"></i><span data-i18n="kHarm"></span></span>
         </div>
-        <p class="note" id="recordNote"></p>
+        <p class="means" id="recordNote"></p>
       </article>
 
-      <div class="two">
-        <article class="card">
-          <h3 data-i18n="recurTitle">Where it burns again and again</h3>
-          <p class="note" id="recurNote"></p>
-        </article>
-        <article class="card">
-          <h3 data-i18n="humanTitle">Human fingerprint</h3>
-          <div id="weekday"></div>
-          <p class="note" id="weekNote"></p>
-        </article>
-      </div>
+      <details class="deeper">
+        <summary data-i18n="deeper">For specialists: calendar, repeat burns, human fingerprint and downloads</summary>
 
-      <article class="card downloads">
-        <h3 data-i18n="download">Download</h3>
-        <div class="row wrap">
-          <label class="field small"><span data-i18n="from">From</span><select id="from"></select></label>
-          <label class="field small"><span data-i18n="to">To</span><select id="to"></select></label>
-          <button class="btn" id="dlMonthly" data-i18n="dlMonthly">Monthly record (CSV)</button>
-          <button class="btn" id="dlCells" data-i18n="dlCells">Hotspots by cell (CSV)</button>
-          <button class="btn ghost" id="dlRings" data-i18n="dlRings">Fire Rings (PNG)</button>
+        <article class="card">
+          <div class="card-head">
+            <h3 data-i18n="calTitle">Burning activity calendar</h3>
+            <div class="seg" role="group">
+              <button class="on" data-cal="count" data-i18n="calCount">Hotspots</button>
+              <button data-cal="anomaly" data-i18n="calAnom">Compared with usual</button>
+            </div>
+          </div>
+          <div id="calendar" class="calendar"></div>
+          <div id="calLegend" class="legend"></div>
+        </article>
+
+        <div class="two">
+          <article class="card">
+            <h3 data-i18n="recurTitle">Where it burns again and again</h3>
+            <p class="note" id="recurNote"></p>
+          </article>
+          <article class="card">
+            <h3 data-i18n="humanTitle">Human fingerprint</h3>
+            <div id="weekday"></div>
+            <p class="note" id="weekNote"></p>
+          </article>
         </div>
-        <p class="small muted" data-i18n="dataNote"></p>
-      </article>
+
+        <article class="card downloads">
+          <h3 data-i18n="download">Download</h3>
+          <div class="row wrap">
+            <label class="field small"><span data-i18n="from">From</span><select id="from"></select></label>
+            <label class="field small"><span data-i18n="to">To</span><select id="to"></select></label>
+            <button class="btn" id="dlMonthly" data-i18n="dlMonthly">Monthly record (CSV)</button>
+            <button class="btn" id="dlCells" data-i18n="dlCells">Hotspots by cell (CSV)</button>
+            <button class="btn ghost" id="dlRings" data-i18n="dlRings">Fire Rings (PNG)</button>
+          </div>
+          <p class="small muted" data-i18n="dataNote"></p>
+        </article>
+      </details>
     </div>
   </section>
 </main>

@@ -52,18 +52,22 @@ const miOf = (year, m) => (year - ym(0).year) * 12 + m - (meta().start[1] - 1);
 export function rings(el, series, opts = {}) {
   const { outlook = null, title = "", size = 460, highlight = null, ref = series } = opts;
   const { years, rows } = grid(series);
+  const upto = opts.upto ?? years.length;   // draw only the first `upto` years (growing tree)
   const color = rankScale(ref);
   const svg = d3.select(el).html("").append("svg")
     .attr("viewBox", `${-size / 2} ${-size / 2} ${size} ${size}`)
     .attr("role", "img").attr("direction", "ltr")
     .attr("aria-label", `${t("ringsTitle")} · ${title} · ${years[0]}–${years.at(-1)}`);
   const inner = size * 0.12, outer = size * 0.40;
-  const ringW = (outer - inner) / (years.length + (outlook ? 1.4 : 0));
+  // reserveOutlook keeps the same ring sizes with or without the outlook ring, so the two
+  // layers of the before / after slider line up exactly
+  const ringW = (outer - inner) / (years.length + (outlook || opts.reserveOutlook ? 1.4 : 0));
+  const labels = opts.labels !== false;
   const arc = d3.arc();
   const a = (m) => (m / 12) * 2 * Math.PI;
   const g = svg.append("g");
   rows.forEach((row, yi) => row.forEach((v, m) => {
-    if (v == null) return;
+    if (v == null || yi >= upto) return;
     g.append("path")
       .attr("d", arc({ innerRadius: inner + yi * ringW + 0.4, outerRadius: inner + (yi + 1) * ringW - 0.4,
         startAngle: a(m) + 0.006, endAngle: a(m + 1) - 0.006 }))
@@ -72,7 +76,7 @@ export function rings(el, series, opts = {}) {
       .on("mousemove", (ev) => showTip(ev, `<b>${MONL()[m]} ${years[yi]}</b><br>${fmt(v)} ${t("hotspots")}`))
       .on("mouseleave", hideTip);
   }));
-  if (outlook) { // dashed outer ring: the next three months
+  if (outlook && upto >= years.length) { // dashed outer ring: the next three months
     const r0 = inner + years.length * ringW + ringW * 0.4, r1 = r0 + ringW;
     const last = ym(meta().months - 1);
     outlook.forEach((o, k) => {
@@ -89,13 +93,41 @@ export function rings(el, series, opts = {}) {
     svg.append("text").attr("class", "ring-month").attr("x", Math.cos(ang) * r).attr("y", Math.sin(ang) * r)
       .attr("text-anchor", "middle").attr("dominant-baseline", "middle").text(name);
   });
-  [0, Math.floor(years.length / 2), years.length - 1].forEach((yi) => {
+  // year labels only on one layer of the slider (the centre title is drawn on both, in the same spot)
+  [0, Math.floor(years.length / 2), years.length - 1].filter((yi) => labels && yi < upto).forEach((yi) => {
     svg.append("text").attr("class", "ring-year").attr("x", 3).attr("y", -(inner + (yi + 0.5) * ringW))
       .attr("dominant-baseline", "middle").text(years[yi]);
   });
   svg.append("text").attr("class", "ring-centre").attr("text-anchor", "middle").attr("dy", "0.35em")
     .text(title.length > 14 ? title.slice(0, 13) + "…" : title);
   return svg.node();
+}
+
+// ------------------------------------------------------------------ before / after slider
+// Two Fire Rings on top of each other: the raw record underneath, the harmonized record on
+// top, cut by a handle the reader drags. Both use the harmonized yardstick for colour.
+export function beforeAfter(el, o) {
+  const root = d3.select(el);
+  const pos = root.attr("data-pos") != null ? +root.attr("data-pos") : 50;
+  root.html("").classed("ba", true).attr("dir", "ltr");
+  const common = { title: o.title, highlight: o.highlight, ref: o.ref, upto: o.upto, size: o.size };
+  const raw = root.append("div").attr("class", "ba-layer ba-raw");
+  const harm = root.append("div").attr("class", "ba-layer ba-harm");
+  rings(raw.node(), o.raw, { ...common, outlook: null, reserveOutlook: !!o.outlook, labels: false });
+  rings(harm.node(), o.harm, { ...common, outlook: o.outlook });
+  const line = root.append("div").attr("class", "ba-line").attr("aria-hidden", "true");
+  root.append("span").attr("class", "ba-tag ba-tag-l").text(t("rawPublished"));
+  root.append("span").attr("class", "ba-tag ba-tag-r").text(t("harmonized"));
+  const input = root.append("input").attr("type", "range").attr("min", 0).attr("max", 100).attr("step", 0.5)
+    .attr("class", "ba-range").attr("aria-label", t("baAria")).property("value", pos);
+  const set = (p) => {
+    harm.style("clip-path", `inset(0 0 0 ${p}%)`);
+    line.style("left", `${p}%`);
+    root.attr("data-pos", p);
+  };
+  input.on("input", (ev) => set(+ev.target.value));
+  set(pos);
+  return { set: (p) => { input.property("value", p); set(p); } };
 }
 
 // ------------------------------------------------------------------ calendar grid
