@@ -51,7 +51,9 @@ function nextMonths(H, outlook) {
   const last = D.ym(D.meta().months - 1), st = monthStats(H);
   return outlook.map((m, k) => {
     const mo = (last.month + 1 + k) % 12;
-    return { m: mo, year: last.year + Math.floor((last.month + 1 + k) / 12), exp: m, usual: st.median[mo], lvl: levelOf(m, st.all) };
+    // a handful of fires is never "high", whatever the area's history (4 fires vs a usual 1 is not a crisis)
+    const lvl = m < 5 ? Math.min(levelOf(m, st.all), 1) : levelOf(m, st.all);
+    return { m: mo, year: last.year + Math.floor((last.month + 1 + k) / 12), exp: m, usual: st.median[mo], lvl };
   });
 }
 
