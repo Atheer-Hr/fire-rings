@@ -230,7 +230,7 @@ function renderForecast(a, sea) {
         <span class="wx-dname">${S[d.m]}</span>
         ${meter(d.lvl)}
         <span class="wx-dnum">${fmt(d.exp)}</span>
-        <span class="wx-dchance">${d.chance > 0.99 ? "&gt;99" : Math.round(d.chance * 100)}% ${t("chance")}</span>
+        <span class="wx-dchance">${d.chance > 0.99 ? t("chanceOver99") : `${Math.round(d.chance * 100)}% ${t("chance")}`}</span>
       </div>`).join("")}
     </div>`;
   $("#saveCard").onclick = saveCard;

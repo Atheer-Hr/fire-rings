@@ -24,7 +24,7 @@ const S = {
     fireForecast: "Fire Forecast", issued: "Outlook from {month} · data to {last}",
     levels: ["Low", "Moderate", "High", "Very high", "Extreme"],
     expectedIn: "hotspots expected in {month}",
-    usualFor: "Usual for {month}: {n}", chance: "chance of fire",
+    usualFor: "Usual for {month}: {n}", chance: "chance of fire", chanceOver99: "&gt;99% chance of fire",
     seasonIn: "Fire season starts in about {d}", seasonOn: "Fire season under way · usually ends around {date}",
     seasonOff: "Off season · next season around {date}",
     seasonLate: "The season should be over by now, but burning is still far above usual — stay ready",
@@ -133,6 +133,8 @@ const S = {
     levels: ["منخفض", "متوسط", "مرتفع", "مرتفع جداً", "شديد"],
     expectedIn: "نقطة حريق متوقعة في {month}",
     usualFor: "المعتاد في {month}: {n}", chance: "احتمال حريق",
+    // the ">" sign mirrors in right-to-left text and would read "less than", so say it in words
+    chanceOver99: "احتمال حريق أكثر من 99%",
     seasonIn: "يبدأ موسم الحرائق بعد نحو {d}", seasonOn: "موسم الحرائق جارٍ · ينتهي عادةً نحو {date}",
     seasonOff: "خارج الموسم · الموسم القادم نحو {date}",
     seasonLate: "الموسم يُفترض أنه انتهى، لكن الحرائق ما زالت أعلى بكثير من المعتاد — ابقوا مستعدين",
